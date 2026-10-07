@@ -1,0 +1,2189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle de Frame — Edição Hardball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Symbols+2&text=%E2%99%9A%E2%99%9B%E2%99%9C%E2%99%9D%E2%99%9E%E2%99%9F&display=swap">
+<style>
+:root{
+  /* Layout: palco de uma tela por vez. Barra do módulo no topo, slide rolável no centro, navegação e progresso embaixo.
+     Fio visual do roteiro: tabuleiro preto e grafite com uma única peça dourada. */
+  --board:#0d0d10;
+  --graphite:#17171b;
+  --graphite-2:#222228;
+  --line:#34343c;
+  --chalk:#ede8de;
+  --smoke:#a39e94;
+  --gold:#c9a548;
+  --gold-hi:#e8ca78;
+  --blood:#e0645a;
+  --radar:#86c597;
+  --promo:#f1d438;
+  --sq-dark:#0a0a0c;
+  --sq-light:#2a2a30;
+  --piece:#8f8c95;
+  --lcd:#1d0f0e;
+  --ink-on-light:#15130c;
+
+  --f-display:"Bodoni Moda","Bodoni 72","Didot","Times New Roman",serif;
+  --f-body:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --f-chess:"Noto Sans Symbols 2","Segoe UI Symbol","Apple Symbols","DejaVu Sans",sans-serif;
+
+  --gutter:clamp(16px,4vw,56px);
+  color-scheme:dark;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{height:100%;box-sizing:border-box;background:var(--board)}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none!important}
+body{
+  margin:0;height:100%;
+  background:var(--board);color:var(--chalk);
+  font-family:var(--f-body);font-size:17px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+img,svg{max-width:100%}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold-hi);outline-offset:3px}
+p{margin:0}
+h1,h2,h3{margin:0;font-weight:500}
+
+/* ---------- Estrutura do app ---------- */
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px clamp(16px,3vw,32px);border-bottom:1px solid var(--line);background:var(--board);
+}
+.brand{
+  min-width:0;display:flex;align-items:baseline;gap:10px;
+  font:500 12px/1.2 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--smoke);
+}
+.brand b{color:var(--gold);font-weight:500;white-space:nowrap}
+.brand span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tools{display:flex;gap:6px;flex-shrink:0}
+.tool{
+  font:500 11.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;
+  background:transparent;border:1px solid var(--line);border-radius:999px;
+  padding:9px 13px;cursor:pointer;color:var(--chalk);
+}
+.tool:hover{border-color:var(--smoke)}
+.tool[aria-pressed="true"]{border-color:var(--gold);color:var(--gold-hi)}
+
+.stage{position:relative;min-height:0;overflow-y:auto}
+.js .stage{overflow:hidden}
+.slide{min-height:100%}
+.js .slide{display:none;height:100%;overflow-y:auto;overscroll-behavior:contain}
+.js .slide.is-active{display:block;animation:enter .38s cubic-bezier(.2,.7,.2,1) both}
+@keyframes enter{from{opacity:.001;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.slide-inner{
+  max-width:1160px;margin-inline:auto;
+  padding-block:clamp(24px,5vh,60px) clamp(36px,7vh,80px);
+  padding-inline:var(--gutter);
+  display:flex;flex-direction:column;gap:clamp(22px,3.4vh,36px);
+}
+
+.navbar{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px;
+  padding:10px clamp(16px,3vw,32px);border-top:1px solid var(--line);background:var(--board);
+}
+.navbtn{
+  height:44px;min-width:44px;padding:0 14px;border-radius:999px;
+  border:1px solid var(--line);background:var(--graphite);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font:500 11.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;
+}
+.navbtn:hover:not(:disabled){border-color:var(--gold)}
+.navbtn:disabled{opacity:.35;cursor:default}
+.navbtn svg{width:16px;height:16px;flex:none}
+.navbtn.next{background:var(--gold);border-color:var(--gold);color:var(--ink-on-light)}
+.navbtn.next:hover:not(:disabled){background:var(--gold-hi)}
+.progress{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0}
+.track{position:relative;height:3px;background:var(--graphite-2);border-radius:2px}
+.fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--gold);border-radius:2px;transition:width .3s ease}
+.tick{position:absolute;top:-3px;width:1px;height:9px;background:var(--smoke);opacity:.6}
+.meta{
+  min-width:0;display:flex;justify-content:space-between;gap:12px;
+  font:500 11.5px/1.2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--smoke);
+}
+.meta-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta-count{font-variant-numeric:tabular-nums;color:var(--chalk);white-space:nowrap}
+@media (max-width:560px){
+  .navbtn .txt{display:none}
+  .navbtn{padding:0}
+  .tool-fs{display:none}
+  .brand span{display:none}
+}
+
+/* ---------- Tipografia dos slides ---------- */
+.eyebrow{font:500 12px/1.3 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+.eyebrow .dim{color:var(--smoke)}
+.slide-head{display:grid;gap:14px}
+.title{
+  font-family:var(--f-display);font-weight:500;
+  font-size:clamp(2rem,4.4vw,3.6rem);line-height:1.05;letter-spacing:-.012em;
+  text-wrap:balance;max-width:24ch;
+}
+.title em{font-style:italic;color:var(--gold-hi)}
+.title.quote{font-style:italic;max-width:20ch}
+.title.quote::before{content:"“";color:var(--gold)}
+.title.quote::after{content:"”";color:var(--gold)}
+.lede{font-size:clamp(1.05rem,1.6vw,1.24rem);color:var(--smoke);max-width:62ch;line-height:1.5}
+.label{font:500 11.5px/1.3 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--smoke)}
+.caption{font-family:var(--f-display);font-style:italic;font-size:clamp(1.15rem,2vw,1.5rem);color:var(--chalk);text-wrap:balance}
+
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(22px,3.4vw,44px);align-items:start}
+.cols.wide-left{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr)}
+.cols.center{align-items:center}
+@media (max-width:860px){.cols,.cols.wide-left{grid-template-columns:minmax(0,1fr)}}
+
+.topics{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.topics li{position:relative;padding-left:30px;font-size:clamp(1.04rem,1.55vw,1.2rem);line-height:1.45;max-width:60ch}
+.topics li::before{content:"";position:absolute;left:2px;top:.68em;width:16px;height:1.5px;background:var(--gold)}
+.topics strong{color:var(--gold-hi);font-weight:600}
+
+.visual{margin:0;display:grid;gap:12px;min-width:0}
+.visual figcaption{color:var(--smoke);font-size:15px}
+
+/* ---------- Diálogos Antes / Depois ---------- */
+.duel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+@media (max-width:860px){.duel{grid-template-columns:minmax(0,1fr)}}
+.dialog{
+  min-width:0;display:grid;gap:13px;align-content:start;
+  background:var(--graphite);border:1px solid var(--line);border-radius:4px;padding:18px 20px 20px;
+}
+.dialog.depois{border-color:color-mix(in srgb,var(--gold) 50%,var(--line))}
+.dialog-head{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+  font:500 11.5px/1.2 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;
+  padding-bottom:12px;border-bottom:1px solid var(--line);
+}
+.antes .dialog-head{color:var(--blood)}
+.depois .dialog-head{color:var(--gold)}
+.dialog-head .sub{color:var(--smoke)}
+.line{display:grid;grid-template-columns:92px minmax(0,1fr);gap:12px}
+.who{font:500 11px/2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--smoke)}
+.line.v .who{color:var(--chalk)}
+.say{min-width:0}
+.cue{font-style:italic;color:var(--smoke)}
+.note{
+  display:block;margin-top:6px;
+  font:500 11px/1.45 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;
+}
+.antes .note{color:var(--blood)}
+.depois .note{color:var(--gold)}
+.stamp{
+  display:inline-block;transform:rotate(-6deg);
+  border:2px solid currentColor;padding:4px 8px;border-radius:2px;
+  font:500 11px/1 var(--f-mono);letter-spacing:.2em;color:var(--blood);
+}
+.msg{font-family:var(--f-body)}
+@media (max-width:520px){.line{grid-template-columns:minmax(0,1fr);gap:0}}
+
+/* ---------- Roteiro do treinador ---------- */
+.roteiro{border-top:1px solid var(--line)}
+.roteiro summary{
+  list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:16px 0;font:500 12px/1.2 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
+}
+.roteiro summary::-webkit-details-marker{display:none}
+.roteiro summary::after{content:"Abrir";color:var(--smoke);letter-spacing:.12em}
+.roteiro[open] summary::after{content:"Fechar"}
+.fala{
+  display:grid;gap:14px;max-width:70ch;padding-bottom:6px;
+  font-family:var(--f-display);font-size:clamp(1.08rem,1.5vw,1.22rem);line-height:1.62;color:var(--chalk);
+}
+.fala p:first-child::first-letter{color:var(--gold-hi)}
+
+/* ---------- Blocos de dinâmica ---------- */
+.drill{
+  border:1px dashed color-mix(in srgb,var(--gold) 70%,transparent);border-radius:4px;
+  padding:20px;display:grid;gap:16px;background:color-mix(in srgb,var(--gold) 5%,var(--board));
+}
+.drill-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+@media (max-width:760px){.drill-cols{grid-template-columns:minmax(0,1fr)}}
+.drill-cols>div{display:grid;gap:8px;align-content:start;min-width:0}
+.drill-k{font-weight:600;color:var(--gold-hi)}
+.linkbtn{
+  justify-self:start;margin-top:4px;cursor:pointer;
+  background:transparent;border:1px solid var(--gold);color:var(--gold-hi);border-radius:999px;
+  padding:9px 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;
+}
+.linkbtn:hover{background:color-mix(in srgb,var(--gold) 14%,transparent)}
+
+/* ---------- Tabuleiro ---------- */
+.board-wrap{container-type:inline-size;width:min(100%,460px);margin-inline:auto}
+.board{
+  position:relative;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));
+  aspect-ratio:1/1;max-width:100%;border:1px solid var(--line);
+  box-shadow:0 40px 90px -40px #000;
+}
+.board::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 75% 60% at 50% -5%,color-mix(in srgb,var(--chalk) 20%,transparent),transparent 70%);
+}
+.sq{position:relative;display:grid;place-items:center;aspect-ratio:1/1}
+.sq.l{background:var(--sq-light)}
+.sq.d{background:var(--sq-dark)}
+.pc{font-family:var(--f-chess);font-size:28px;font-size:9.2cqi;line-height:1;color:var(--piece)}
+.pc.gold{color:var(--gold-hi);text-shadow:0 0 18px color-mix(in srgb,var(--gold) 70%,transparent),0 0 2px var(--gold)}
+.pc.toppled{transform:rotate(90deg) translateY(8%);color:var(--smoke)}
+.sq.x::before,.sq.x::after{
+  content:"";position:absolute;left:28%;right:28%;top:50%;height:2px;background:var(--blood);
+}
+.sq.x::before{transform:rotate(45deg)}
+.sq.x::after{transform:rotate(-45deg)}
+
+/* ---------- Capa ---------- */
+.cover{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:clamp(24px,4vw,56px);align-items:center;min-height:100%}
+.cover h1{
+  font-family:var(--f-display);font-weight:500;
+  font-size:clamp(3rem,9vw,7.4rem);line-height:.92;letter-spacing:-.025em;text-wrap:balance;
+}
+.cover h1 em{display:block;font-style:italic;color:var(--gold-hi);font-size:.56em;letter-spacing:-.01em;margin-top:.18em}
+.cover-text{display:grid;gap:clamp(18px,3vh,30px)}
+.for{font-size:clamp(1.1rem,2vw,1.45rem);color:var(--smoke)}
+.for strong{color:var(--chalk);font-weight:600}
+.facts{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+.facts li{
+  border:1px solid var(--line);border-radius:999px;padding:7px 13px;
+  font:500 12px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;font-variant-numeric:tabular-nums;
+}
+.facts li b{color:var(--gold-hi);font-weight:500}
+.byline{font:500 12px/1.5 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--smoke)}
+.hint{font-size:15px;color:var(--smoke);max-width:46ch}
+.king{
+  display:grid;place-items:center;position:relative;aspect-ratio:3/4;max-width:100%;
+  background:radial-gradient(ellipse 46% 38% at 50% 42%,color-mix(in srgb,var(--gold) 18%,transparent),transparent 100%);
+  container-type:inline-size;
+}
+.king span{
+  font-family:var(--f-chess);font-size:120px;font-size:62cqi;line-height:1;color:var(--gold-hi);
+  text-shadow:0 0 40px color-mix(in srgb,var(--gold) 60%,transparent);
+}
+.king::after{content:"";position:absolute;left:12%;right:12%;bottom:14%;height:1px;background:var(--line)}
+@media (max-width:760px){
+  .cover{grid-template-columns:minmax(0,1fr)}
+  .king{aspect-ratio:auto;height:180px;order:-1}
+  .king span{font-size:140px}
+  .king::after{bottom:4px}
+}
+
+/* ---------- Regras ---------- */
+.rule{
+  display:grid;gap:12px;padding:clamp(20px,3vw,32px);
+  border:1px solid var(--gold);border-radius:4px;background:color-mix(in srgb,var(--gold) 6%,var(--board));
+}
+.rule p.big{font-family:var(--f-display);font-size:clamp(1.35rem,2.6vw,2rem);line-height:1.25;text-wrap:balance}
+.banned{display:flex;flex-wrap:wrap;gap:10px;list-style:none;margin:0;padding:0}
+.banned li{
+  padding:8px 14px;border:1px solid color-mix(in srgb,var(--blood) 60%,var(--line));border-radius:2px;
+  color:var(--blood);text-decoration:line-through;text-decoration-thickness:1.5px;
+  font:500 12.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;
+}
+.pull{
+  font-family:var(--f-display);font-style:italic;font-size:clamp(1.4rem,3vw,2.3rem);line-height:1.22;
+  max-width:30ch;text-wrap:balance;color:var(--chalk);
+}
+.pull b{font-style:normal;font-weight:500;color:var(--gold-hi)}
+
+/* ---------- Mapa e divisórias ---------- */
+.modmap{display:grid;gap:0;border-top:1px solid var(--line)}
+.modrow{
+  display:grid;grid-template-columns:64px minmax(0,1.6fr) 90px 80px minmax(0,1.4fr);gap:16px;align-items:baseline;
+  padding:18px 4px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;cursor:pointer;width:100%;
+}
+.modrow:hover{background:var(--graphite)}
+.modrow .n{font-family:var(--f-display);font-size:2.2rem;line-height:1;color:var(--gold-hi)}
+.modrow .name{font-family:var(--f-display);font-size:clamp(1.15rem,2vw,1.5rem);line-height:1.2}
+.modrow .k{font:500 12px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--smoke);font-variant-numeric:tabular-nums}
+.modrow .weapon{color:var(--chalk)}
+.modrow.total{cursor:default;border-bottom:0}
+.modrow.total:hover{background:transparent}
+.modhead{padding-block:10px;cursor:default}
+.modhead:hover{background:transparent}
+@media (max-width:760px){
+  .modrow{grid-template-columns:48px minmax(0,1fr);row-gap:6px}
+  .modrow .k,.modrow .weapon{grid-column:2}
+  .modhead{display:none}
+}
+.divider{display:grid;gap:clamp(20px,3vh,32px);align-content:center;min-height:100%}
+.divider .big-n{font-family:var(--f-display);font-style:italic;font-size:clamp(4rem,12vw,9rem);line-height:.8;color:var(--gold-hi)}
+.divider h2{font-family:var(--f-display);font-size:clamp(2.3rem,6vw,4.8rem);line-height:1;letter-spacing:-.02em;max-width:18ch;text-wrap:balance}
+.agenda{list-style:none;margin:0;padding:0;display:grid;gap:0;border-top:1px solid var(--line);max-width:760px}
+.agenda button{
+  width:100%;display:grid;grid-template-columns:48px minmax(0,1fr);gap:12px;align-items:baseline;text-align:left;
+  padding:12px 4px;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;
+}
+.agenda button:hover{background:var(--graphite)}
+.agenda .n{font:500 12px/1 var(--f-mono);color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:.08em}
+
+/* ---------- Slide 1 / 24 ---------- */
+.impact{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:center}
+.impact .title{font-size:clamp(2.4rem,5.6vw,4.6rem);max-width:13ch}
+@media (max-width:860px){.impact{grid-template-columns:minmax(0,1fr)}}
+.endline{font-family:var(--f-display);font-size:clamp(2rem,5vw,4rem);line-height:1.04;letter-spacing:-.015em;max-width:14ch;text-wrap:balance}
+.endline em{color:var(--gold-hi)}
+
+/* ---------- Slide 2: garrafas ---------- */
+.frames{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.frame{display:grid;gap:8px;min-width:0}
+.frame svg{display:block;width:100%;height:auto;border-radius:3px}
+.frame .label{text-align:center}
+.f-shelfbg{fill:var(--graphite-2)}
+.f-cellar{fill:var(--sq-dark)}
+.f-bottle{fill:var(--board)}
+.f-bottle-l{fill:var(--sq-light)}
+.f-shelf{fill:var(--smoke)}
+.f-promo{fill:var(--promo)}
+.t-promo{fill:var(--ink-on-light);font:700 13px var(--f-body)}
+.t-promo-s{fill:var(--ink-on-light);font:600 9px var(--f-body)}
+.f-gold{fill:var(--gold)}
+.s-gold{stroke:var(--gold);fill:none}
+.f-light{fill:url(#spot)}
+.stop-a{stop-color:var(--gold-hi);stop-opacity:.45}
+.stop-b{stop-color:var(--gold-hi);stop-opacity:0}
+.f-label{fill:var(--chalk)}
+.f-label-d{fill:var(--smoke)}
+
+/* ---------- Slide 3: absorção ---------- */
+.s-calm{stroke:var(--chalk);fill:none}
+.s-calm-d{stroke:var(--smoke);fill:none;opacity:.45}
+.s-storm{stroke:var(--blood);fill:none}
+.f-panel{fill:var(--graphite)}
+
+/* ---------- Slide 4: radar ---------- */
+.radar-tool{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(20px,3vw,40px);align-items:start}
+@media (max-width:860px){.radar-tool{grid-template-columns:minmax(0,1fr)}}
+.radar-box{display:grid;gap:14px;justify-items:center}
+.radar{width:100%;max-width:420px;height:auto;display:block}
+.r-ring{fill:none;stroke:color-mix(in srgb,var(--radar) 35%,transparent)}
+.r-spoke{stroke:color-mix(in srgb,var(--radar) 25%,transparent)}
+.r-bg{fill:color-mix(in srgb,var(--radar) 6%,var(--board))}
+.r-sweep{fill:color-mix(in srgb,var(--radar) 22%,transparent);transform-box:view-box;transform-origin:150px 150px;animation:sweep 4.5s linear infinite}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.r-blip{transition:fill .2s}
+.r-blip.seu{fill:var(--gold-hi)}
+.r-blip.dele{fill:var(--blood)}
+.r-pulse{fill:none;stroke-width:1.5;transform-box:fill-box;transform-origin:center;animation:pulse 2.2s ease-out infinite}
+.r-pulse.seu{stroke:var(--gold-hi)}
+.r-pulse.dele{stroke:var(--blood)}
+@keyframes pulse{from{transform:scale(1);opacity:.9}to{transform:scale(3);opacity:0}}
+.r-label{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.r-label.seu{fill:var(--gold-hi)}
+.r-label.dele{fill:var(--blood)}
+.verdict{font-family:var(--f-display);font-size:clamp(1.2rem,2.2vw,1.6rem);line-height:1.25;text-align:center;max-width:28ch;text-wrap:balance}
+.verdict.bad{color:var(--blood)}
+.verdict.good{color:var(--gold-hi)}
+.signals{border:0;margin:0;padding:0;display:grid;gap:0;min-width:0}
+.signals legend{padding:0 0 12px;color:var(--smoke);font-size:15px}
+.signal{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:13px 0;border-top:1px solid var(--line)}
+.signal:last-child{border-bottom:1px solid var(--line)}
+.signal-name{font:500 12px/1.3 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--radar)}
+.signal-q{font-size:16px;line-height:1.4}
+.seg{position:relative;display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{
+  padding:8px 13px;border-radius:999px;cursor:pointer;
+  font:500 11.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--smoke);
+}
+.seg input:focus-visible+label{outline:2px solid var(--gold-hi);outline-offset:1px}
+.seg input[value="seu"]:checked+label{background:var(--gold);color:var(--ink-on-light)}
+.seg input[value="dele"]:checked+label{background:var(--blood);color:var(--ink-on-light)}
+
+/* ---------- Slide 6: arsenal ---------- */
+.weapons{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;counter-reset:w}
+@media (max-width:760px){.weapons{grid-template-columns:minmax(0,1fr)}}
+.weapon-card{
+  display:grid;gap:12px;align-content:start;padding:22px 20px;min-width:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 0%,color-mix(in srgb,var(--chalk) 9%,transparent),transparent 70%),var(--graphite);
+  border:1px solid var(--line);border-radius:4px;counter-increment:w;
+}
+.weapon-card svg{width:64px;height:64px;color:var(--gold-hi)}
+.weapon-card .label::before{content:"Arma " counter(w) " · "}
+.weapon-card h3{font-family:var(--f-display);font-size:1.6rem;line-height:1.1}
+.weapon-card p{color:var(--smoke)}
+.s-velvet{stroke:var(--blood)}
+
+/* ---------- Slide 7: tribunal ---------- */
+.court{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+@media (max-width:640px){.court{grid-template-columns:minmax(0,1fr)}}
+.seat{padding:20px;border:1px solid var(--line);border-radius:4px;background:var(--graphite);display:grid;gap:10px;min-width:0}
+.seat h3{font-family:var(--f-display);font-size:1.5rem}
+.seat ul{margin:0;padding-left:18px;display:grid;gap:6px;color:var(--smoke)}
+.seat.juiz{border-color:var(--gold);padding-bottom:44px;background:color-mix(in srgb,var(--gold) 7%,var(--graphite))}
+.seat.juiz h3{color:var(--gold-hi)}
+.seat.reu h3{color:var(--blood)}
+.questions{list-style:none;margin:0;padding:0;display:grid;gap:8px;counter-reset:q}
+.questions li{counter-increment:q;display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;font-family:var(--f-display);font-size:1.2rem;line-height:1.3}
+.questions li::before{content:counter(q,decimal-leading-zero);font:500 12px/1.9 var(--f-mono);color:var(--gold)}
+
+/* ---------- Escadas (slides 8 e 13) ---------- */
+.stairs{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:end}
+.step{
+  display:grid;gap:6px;align-content:start;padding:16px;min-width:0;
+  background:var(--graphite);border:1px solid var(--line);border-radius:4px 4px 0 0;
+  min-height:calc(96px + var(--i) * 40px);
+}
+.step:last-child{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 9%,var(--graphite))}
+.step .label{color:var(--gold)}
+.step b{font-family:var(--f-display);font-weight:500;font-size:clamp(1.15rem,1.8vw,1.45rem);line-height:1.2}
+.step span{color:var(--smoke);font-size:15px;line-height:1.4}
+@media (max-width:640px){
+  .stairs{grid-template-columns:minmax(0,1fr)}
+  .step{min-height:0;margin-left:calc(var(--i) * 14px);border-radius:4px}
+}
+
+/* ---------- Slide 9: corda ---------- */
+.criteria{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.criteria{grid-template-columns:minmax(0,1fr)}}
+.criteria li{padding:14px;border:1px solid var(--gold);border-radius:3px;text-align:center;font:500 12.5px/1.2 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gold-hi)}
+.quote{font-family:var(--f-display);font-style:italic;font-size:clamp(1.15rem,2vw,1.45rem);line-height:1.4;max-width:46ch}
+.warn{display:grid;gap:8px;padding:16px 18px;border:1px solid color-mix(in srgb,var(--blood) 55%,var(--line));border-radius:4px}
+.warn .label{color:var(--blood)}
+.rope{width:100%;height:auto;display:block}
+
+/* ---------- Slide 10: celulares ---------- */
+.phones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:640px){.phones{grid-template-columns:minmax(0,1fr)}}
+.phone-col{display:grid;gap:10px;align-content:start;min-width:0}
+.phone{
+  border:1px solid var(--line);border-radius:28px;padding:14px 14px 22px;background:var(--sq-dark);
+  display:grid;gap:10px;align-content:start;min-height:300px;max-width:340px;width:100%;justify-self:center;
+}
+.phone-top{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 10px;border-bottom:1px solid var(--line)}
+.phone-top b{font-weight:600}
+.phone-top span{font:500 10.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--smoke)}
+.bubble{justify-self:end;max-width:88%;padding:10px 13px;border-radius:14px 14px 4px 14px;background:var(--graphite-2);font-size:15px;line-height:1.4}
+.phone.dom .bubble{background:color-mix(in srgb,var(--gold) 16%,var(--graphite-2));border:1px solid color-mix(in srgb,var(--gold) 50%,transparent)}
+.seen{justify-self:end;font:500 10.5px/1 var(--f-mono);letter-spacing:.08em;color:var(--smoke)}
+.phone-col .label{text-align:center}
+.phone-col.antes .label{color:var(--blood)}
+.phone-col.depois .label{color:var(--gold)}
+
+/* ---------- Slide 11: barras ---------- */
+.bars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:end;border-bottom:1px solid var(--line);max-width:420px}
+.bar{display:grid;gap:8px;align-content:end;text-align:center}
+.bar i{display:block;border-radius:2px 2px 0 0}
+.bar.win i{height:90px;background:var(--graphite-2);border:1px solid var(--line);border-bottom:0}
+.bar.loss i{height:180px;background:var(--blood)}
+.bar b{font-family:var(--f-display);font-size:1.6rem;font-weight:500;line-height:1}
+.bar.loss b{color:var(--blood)}
+.bar-labels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;max-width:420px;text-align:center}
+.source{font-size:14px;color:var(--smoke)}
+.contrast{display:grid;gap:10px}
+.contrast p{font-family:var(--f-display);font-size:clamp(1.15rem,2vw,1.5rem);line-height:1.3}
+.contrast .weak{color:var(--smoke);text-decoration:line-through;text-decoration-color:var(--blood)}
+.contrast .strong{color:var(--gold-hi)}
+
+/* ---------- Slide 12: calculadora ---------- */
+.calc{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(18px,3vw,36px);align-items:start}
+@media (max-width:860px){.calc{grid-template-columns:minmax(0,1fr)}}
+.calc-in{display:grid;gap:14px;min-width:0}
+.field{display:grid;gap:6px}
+.field label{font:500 11.5px/1.3 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--smoke)}
+.field input{
+  width:100%;min-width:0;padding:12px 14px;border-radius:3px;border:1px solid var(--line);
+  background:var(--graphite);color:var(--chalk);font:500 1.05rem/1.2 var(--f-body);font-variant-numeric:tabular-nums;
+}
+.field input:focus{border-color:var(--gold);outline:none}
+.calc-out{display:grid;gap:14px;min-width:0}
+.lcd{
+  display:grid;gap:6px;padding:20px 22px;border-radius:6px;background:var(--lcd);
+  border:1px solid color-mix(in srgb,var(--blood) 40%,var(--line));
+}
+.lcd .label{color:color-mix(in srgb,var(--blood) 70%,var(--smoke))}
+.lcd output{
+  font:500 clamp(2rem,5vw,3.2rem)/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--blood);
+  text-shadow:0 0 22px color-mix(in srgb,var(--blood) 45%,transparent);overflow-wrap:anywhere;
+}
+.lcd small{font-size:.42em;letter-spacing:.06em}
+.tagrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pricetag{
+  position:relative;display:inline-flex;align-items:center;gap:8px;padding:8px 14px 8px 26px;
+  background:var(--graphite-2);color:var(--smoke);border-radius:3px 6px 6px 3px;
+  clip-path:polygon(14px 0,100% 0,100% 100%,14px 100%,0 50%);
+  font:500 14px/1 var(--f-mono);font-variant-numeric:tabular-nums;
+}
+.pricetag::before{content:"";position:absolute;left:12px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:var(--board)}
+.ratio{font-family:var(--f-display);font-size:1.15rem}
+.ratio b{color:var(--blood);font-weight:600}
+.calc-rows{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;margin:0;font-variant-numeric:tabular-nums}
+.calc-rows dt{color:var(--smoke)}
+.calc-rows dd{margin:0;text-align:right;font-weight:600}
+.calc-say{display:grid;gap:10px;padding:16px 18px;border:1px solid color-mix(in srgb,var(--gold) 50%,var(--line));border-radius:4px}
+.calc-say .label{color:var(--gold)}
+.calc-say p:not(.label){font-family:var(--f-display);font-size:1.12rem;line-height:1.45}
+.calc-warn{color:var(--blood);font-size:15px}
+
+/* ---------- Slide 14: judô ---------- */
+.routes{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.routes{grid-template-columns:minmax(0,1fr)}}
+.route{padding:20px;border:1px solid var(--line);border-radius:4px;display:grid;gap:8px;align-content:start;background:var(--graphite);min-width:0}
+.route h3{font-family:var(--f-display);font-size:1.45rem}
+.route .label{display:flex;align-items:center;gap:8px}
+.route.no .label{color:var(--blood)}
+.route.yes{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 8%,var(--graphite))}
+.route.yes .label{color:var(--gold)}
+.route.no h3{text-decoration:line-through;text-decoration-color:var(--blood);text-decoration-thickness:2px}
+.route p{color:var(--smoke)}
+.route.yes p{color:var(--chalk)}
+
+/* ---------- Slide 15: S.R.E. ---------- */
+.sre{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.sre{grid-template-columns:minmax(0,1fr)}}
+.sre li{
+  display:grid;gap:10px;align-content:start;padding:22px 20px;min-width:0;border-radius:4px;
+  background:linear-gradient(180deg,var(--graphite) 0%,var(--sq-dark) 100%);border:1px solid var(--line);
+}
+.sre .letter{font-family:var(--f-display);font-size:clamp(3.6rem,7vw,5.4rem);line-height:.85;color:var(--gold-hi)}
+.sre h3{font:500 13px/1.2 var(--f-mono);letter-spacing:.16em;text-transform:uppercase}
+.sre p{color:var(--smoke)}
+.silence{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:18px 20px;border:1px solid var(--line);border-radius:4px}
+.silence-ring{position:relative;width:84px;height:84px;flex:none}
+.silence-ring svg{width:84px;height:84px;transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:var(--graphite-2);stroke-width:6}
+.ring-fg{fill:none;stroke:var(--gold);stroke-width:6;stroke-linecap:round;stroke-dasharray:226.2;stroke-dashoffset:0}
+.silence-n{position:absolute;inset:0;display:grid;place-items:center;font:500 1.9rem/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.silence-txt{display:grid;gap:8px;min-width:0;flex:1 1 220px}
+.silence-txt p.state{font-family:var(--f-display);font-size:1.25rem}
+
+/* ---------- Ataques ---------- */
+.attack-kicker{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.tombs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;max-width:460px}
+.tomb{
+  display:grid;place-items:center;text-align:center;padding:26px 8px 16px;min-height:120px;
+  background:var(--graphite-2);border-radius:60px 60px 2px 2px;border:1px solid var(--line);
+  font:500 11.5px/1.35 var(--f-mono);letter-spacing:.04em;color:var(--smoke);overflow-wrap:anywhere;
+}
+.tomb:nth-child(2){min-height:140px}
+.tomb::before{content:"R.I.P.";display:block;font-size:10px;letter-spacing:.2em;color:var(--smoke);opacity:.6;margin-bottom:8px}
+
+/* ---------- Slide 21: cartão do clube ---------- */
+.club{
+  display:grid;gap:0;border-radius:10px;overflow:hidden;
+  background:linear-gradient(160deg,#151513 0%,var(--sq-dark) 60%,#121110 100%);
+  border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line));
+  box-shadow:0 30px 70px -40px #000;
+}
+.club-head{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:18px 22px;border-bottom:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));
+  font:500 12px/1.3 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--gold);
+}
+.club-head span:last-child{color:var(--gold-hi)}
+.traps-head,.trap-btn{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:18px;align-items:baseline}
+.traps-head{padding:12px 22px;border-bottom:1px solid var(--line)}
+.traps{list-style:none;margin:0;padding:0}
+.trap{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.trap:last-child{border-bottom:0}
+.trap-btn{width:100%;padding:14px 22px;background:transparent;border:0;text-align:left;cursor:default}
+.traps.is-training .trap-btn{cursor:pointer}
+.trap-q{font-family:var(--f-display);font-size:1.15rem;color:var(--chalk)}
+.trap-a{position:relative;font-family:var(--f-display);font-style:italic;font-size:1.15rem;color:var(--gold-hi);line-height:1.4}
+.traps.is-training .trap:not(.revealed) .trap-a{color:transparent;user-select:none}
+.traps.is-training .trap:not(.revealed) .trap-a::after{
+  content:"Toque para revelar";position:absolute;inset:0;display:flex;align-items:center;
+  font:500 11.5px/1 var(--f-mono);font-style:normal;letter-spacing:.14em;text-transform:uppercase;color:var(--smoke);
+  border:1px dashed var(--line);border-radius:3px;padding:0 12px;
+}
+.trap.drawn{background:color-mix(in srgb,var(--gold) 11%,transparent)}
+.trap.drawn .trap-q{color:var(--gold-hi)}
+@media (max-width:620px){
+  .traps-head{display:none}
+  .trap-btn{grid-template-columns:minmax(0,1fr);gap:6px}
+}
+.club-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.draw-status{color:var(--smoke);font-size:15px;min-height:1.4em}
+.draw-status b{color:var(--gold-hi);font-weight:600}
+
+/* ---------- Slide 22: mapa de poder ---------- */
+.power{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.terr{
+  display:grid;gap:6px;align-content:start;padding:18px;min-width:0;border-radius:3px;
+  background:var(--graphite);border:1px solid var(--line);
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:22px 22px;background-position:-1px -1px;
+}
+.terr .flag{width:22px;height:22px;color:var(--gold-hi)}
+.terr b{font-family:var(--f-display);font-weight:500;font-size:1.3rem;line-height:1.15;background:var(--graphite);justify-self:start}
+.terr span{font:500 11.5px/1.3 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--smoke);background:var(--graphite);justify-self:start}
+.exits{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.exits li{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start;padding:12px 0;border-bottom:1px solid var(--line)}
+.exits li:first-child{border-top:1px solid var(--line)}
+.xmark{position:relative;width:22px;height:22px;margin-top:2px}
+.xmark::before,.xmark::after{content:"";position:absolute;left:0;right:0;top:50%;height:2.5px;background:var(--blood)}
+.xmark::before{transform:rotate(45deg)}
+.xmark::after{transform:rotate(-45deg)}
+.exits b{display:block;font-weight:600}
+.exits span{color:var(--smoke);font-size:15px}
+
+/* ---------- Slide 23: dossiê ---------- */
+.dossier{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:10px}
+.ficha{position:relative}
+.ficha input{position:absolute;opacity:0;pointer-events:none}
+.ficha label{
+  position:relative;display:grid;gap:10px;align-content:start;min-height:150px;padding:18px 18px 54px;cursor:pointer;
+  background:var(--graphite);border:1px solid var(--line);border-radius:3px;
+}
+.ficha label:hover{border-color:var(--smoke)}
+.ficha input:focus-visible+label{outline:2px solid var(--gold-hi);outline-offset:2px}
+.ficha .dia{font:500 12px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+.ficha .tarefa{font-size:16px;line-height:1.4}
+.carimbo{
+  position:absolute;right:14px;bottom:14px;transform:rotate(-7deg);
+  border:2px solid var(--line);color:var(--smoke);padding:4px 8px;border-radius:2px;
+  font:500 11px/1 var(--f-mono);letter-spacing:.2em;text-transform:uppercase;
+}
+.carimbo .ok{display:none}
+.ficha input:checked+label{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 8%,var(--graphite))}
+.ficha input:checked+label .carimbo{border-color:var(--gold);color:var(--gold-hi)}
+.ficha input:checked+label .carimbo .ok{display:inline}
+.ficha input:checked+label .carimbo .todo{display:none}
+.missions-meta{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.missions-meta output{font:500 12.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--gold-hi)}
+
+/* ---------- Índice ---------- */
+.index{
+  position:fixed;inset:0;z-index:30;overflow-y:auto;background:var(--board);
+  padding:calc(env(safe-area-inset-top,0px) + 18px) clamp(16px,4vw,48px) calc(env(safe-area-inset-bottom,0px) + 32px);
+}
+.index-inner{max-width:1160px;margin-inline:auto;display:grid;gap:24px}
+.index-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.index-top h2{font-family:var(--f-display);font-size:clamp(1.8rem,4vw,2.6rem)}
+.index-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:28px 24px}
+.index-mod{display:grid;gap:8px;align-content:start}
+.index-mod h3{font:500 12px/1.4 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gold);padding-bottom:8px;border-bottom:1px solid var(--line)}
+.index-mod button{
+  display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:baseline;text-align:left;
+  background:transparent;border:0;padding:6px 4px;cursor:pointer;border-radius:3px;font-size:15px;line-height:1.35;
+}
+.index-mod button:hover{background:var(--graphite)}
+.index-mod button[aria-current="true"]{background:var(--graphite-2);color:var(--gold-hi)}
+.index-mod .n{font:500 11.5px/1.6 var(--f-mono);color:var(--smoke);font-variant-numeric:tabular-nums}
+.keys{color:var(--smoke);font-size:14px}
+.keys kbd{font:500 12px/1 var(--f-mono);border:1px solid var(--line);border-radius:3px;padding:2px 6px;color:var(--chalk)}
+
+@media (prefers-reduced-motion:reduce){
+  .js .slide.is-active{animation:none}
+  .r-sweep,.r-pulse{animation:none}
+  .r-pulse{display:none}
+  .fill{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="topbar">
+    <p class="brand"><b>Controle de Frame</b><span id="module-label">Abertura</span></p>
+    <div class="tools">
+      <button class="tool" type="button" id="btn-index" aria-haspopup="dialog">Índice</button>
+      <button class="tool" type="button" id="btn-roteiro" aria-pressed="true" title="Mostrar ou esconder o roteiro do treinador (R)">Roteiro</button>
+      <button class="tool tool-fs" type="button" id="btn-fs" title="Tela cheia (F)">Tela cheia</button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+
+<!-- ===================== ABERTURA ===================== -->
+<section class="slide is-active" id="capa" data-module="0" data-title="Capa">
+  <div class="slide-inner">
+    <div class="cover">
+      <div class="cover-text">
+        <p class="eyebrow">Treinamento de vendas <span class="dim">· Negociação B2B</span></p>
+        <h1>Controle de Frame <em>Edição Hardball</em></h1>
+        <p class="for">Preparado para <strong>Diogo Motta</strong></p>
+        <ul class="facts">
+          <li><b>4</b> módulos</li>
+          <li><b>24</b> slides</li>
+          <li><b>2h40</b> de treino</li>
+          <li><b>7</b> missões</li>
+        </ul>
+        <p class="byline">Por Lucas Boaretto · 7 de outubro de 2026</p>
+        <p class="hint">Avance com a seta para a direita, a barra de espaço ou deslizando o dedo para o lado. O Índice leva a qualquer slide.</p>
+      </div>
+      <div class="king" aria-hidden="true"><span>♚</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="regras" data-module="0" data-title="Regras do jogo">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Antes de começar</p>
+      <h2 class="title">Regras do jogo</h2>
+      <p class="lede">Diogo, esta edição troca o “ganha-ganha” por pressão, assimetria e condução agressiva da mesa. São 24 slides com tom de sala de guerra.</p>
+    </header>
+    <div class="rule">
+      <p class="label">A única regra técnica. Não é moral, é pragmática</p>
+      <p class="big">Toda armadilha aqui é construída com as palavras, os números e os compromissos do próprio comprador — nunca com fato inventado.</p>
+    </div>
+    <div class="cols">
+      <div style="display:grid;gap:12px">
+        <p class="label">Armas de amador</p>
+        <ul class="banned">
+          <li>Escassez falsa</li>
+          <li>Prazo fictício</li>
+          <li>Concorrente imaginário</li>
+        </ul>
+      </div>
+      <p>No B2B de alto valor o comprador checa, a mentira vaza, e você troca uma assinatura por uma conta queimada (e, em relação de consumo, por um processo — o CDC trata pressão enganosa como prática abusiva).</p>
+    </div>
+    <p class="pull">A pressão mais cruel que existe é a verdade que o cliente disse e agora não pode desdizer sem parecer incoerente. <b>É isso que vamos treinar.</b></p>
+  </div>
+</section>
+
+<section class="slide" id="mapa" data-module="0" data-title="Mapa do treinamento">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Roteiro</p>
+      <h2 class="title">Mapa do treinamento</h2>
+    </header>
+    <div class="modmap">
+      <div class="modrow modhead" aria-hidden="true">
+        <span class="k"></span><span class="k">Módulo</span><span class="k">Slides</span><span class="k">Tempo</span><span class="k">Arma central</span>
+      </div>
+      <button class="modrow" type="button" data-go="modulo-1">
+        <span class="n">1</span><span class="name">Dominância em 30 segundos</span><span class="k">Slides 1–5</span><span class="k">30 min</span><span class="weapon">Assimetria de status</span>
+      </button>
+      <button class="modrow" type="button" data-go="modulo-2">
+        <span class="n">2</span><span class="name">Juiz, Premiação Absoluta, Perda</span><span class="k">Slides 6–13</span><span class="k">55 min</span><span class="weapon">Inverter quem é avaliado</span>
+      </button>
+      <button class="modrow" type="button" data-go="modulo-3">
+        <span class="n">3</span><span class="name">Contra-ataque</span><span class="k">Slides 14–21</span><span class="k">60 min</span><span class="weapon">Silêncio, rotulação, armadilha de coerência</span>
+      </button>
+      <button class="modrow" type="button" data-go="modulo-4">
+        <span class="n">4</span><span class="name">Cerco à conta</span><span class="k">Slides 22–24</span><span class="k">15 min</span><span class="weapon">Mapa de poder e saídas fechadas</span>
+      </button>
+      <div class="modrow total">
+        <span class="n">∑</span><span class="name">Total</span><span class="k">24 slides</span><span class="k">2h40</span><span class="weapon">Duas dinâmicas práticas e 7 missões</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== MÓDULO 1 ===================== -->
+<section class="slide" id="modulo-1" data-module="1" data-title="Módulo 1">
+  <div class="slide-inner divider">
+    <p class="big-n">1</p>
+    <p class="eyebrow">Módulo 1 de 4 <span class="dim">· 30 min · Slides 1–5</span></p>
+    <h2>Dominância nos primeiros 30 segundos</h2>
+    <p class="lede">Arma central: <strong style="color:var(--gold-hi)">assimetria de status</strong>.</p>
+    <ol class="agenda" data-agenda="1"></ol>
+  </div>
+</section>
+
+<section class="slide" id="slide-1" data-module="1" data-num="1" data-title="Alguém nesta mesa vai obedecer">
+  <div class="slide-inner">
+    <div class="impact">
+      <header class="slide-head">
+        <p class="eyebrow">Módulo 1 <span class="dim">· Slide 01</span></p>
+        <h2 class="title">Alguém nesta mesa vai obedecer. <em>Não seja você.</em></h2>
+      </header>
+      <div class="board-wrap">
+        <div class="board" data-position="rnbqkbnr/pppppppp/8/8/4K3/8/8/8" role="img" aria-label="Tabuleiro de xadrez: as peças adversárias na posição inicial e um único rei dourado no centro"></div>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Toda negociação tem um momento em que alguém passa a seguir as regras do outro. Não é no fechamento. É nos primeiros 30 segundos. Depois disso, o resto da reunião é só a formalização de uma hierarquia que já foi decidida.</p>
+        <p>O comprador profissional sabe disso. Ele chega atrasado de propósito, deixa você esperando na recepção, abre a reunião com ‘tenho só 15 minutos’. Nada disso é acaso. É ele posicionando as peças.</p>
+        <p>Hoje vocês vão aprender a mover primeiro.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-2" data-module="1" data-num="2" data-title="O frame é o preço antes do preço">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 1 <span class="dim">· Slide 02</span></p>
+      <h2 class="title">O frame é o preço <em>antes do preço</em></h2>
+    </header>
+    <div class="cols center">
+      <ul class="topics">
+        <li>O contexto decide o valor antes de você falar o número</li>
+        <li>Quem instala o contexto primeiro, define o critério de julgamento</li>
+        <li>O cliente nunca compara preços — <strong>compara molduras</strong></li>
+      </ul>
+      <figure class="visual">
+        <div class="frames">
+          <div class="frame">
+            <svg viewBox="0 0 220 240" role="img" aria-label="Garrafa de vinho numa gôndola de supermercado com etiqueta amarela de promoção">
+              <defs>
+                <symbol id="bottle" viewBox="0 0 40 140"><path d="M16 0h8v36c0 8 14 13 14 30v68a6 6 0 0 1-6 6H8a6 6 0 0 1-6-6V66c0-17 14-22 14-30z"/></symbol>
+              </defs>
+              <rect class="f-shelfbg" width="220" height="240"/>
+              <use href="#bottle" class="f-bottle-l" x="22" y="60" width="40" height="140" opacity=".55"/>
+              <use href="#bottle" class="f-bottle-l" x="158" y="60" width="40" height="140" opacity=".55"/>
+              <use href="#bottle" class="f-bottle" x="90" y="60" width="40" height="140"/>
+              <rect class="f-shelf" x="0" y="200" width="220" height="6"/>
+              <rect class="f-promo" x="72" y="208" width="76" height="26" rx="2"/>
+              <text class="t-promo" x="110" y="222" text-anchor="middle">PROMOÇÃO</text>
+              <text class="t-promo-s" x="110" y="231" text-anchor="middle">LEVE 3 PAGUE 2</text>
+            </svg>
+            <p class="label">Gôndola · aqui se negocia</p>
+          </div>
+          <div class="frame">
+            <svg viewBox="0 0 220 240" role="img" aria-label="A mesma garrafa numa adega iluminada, trancada com cadeado">
+              <defs>
+                <radialGradient id="spot" cx="50%" cy="0%" r="85%"><stop offset="0" class="stop-a"/><stop offset="1" class="stop-b"/></radialGradient>
+              </defs>
+              <rect class="f-cellar" width="220" height="240"/>
+              <path class="f-light" d="M70 0h80l40 200H30z"/>
+              <path class="s-gold" stroke-width="1.5" d="M50 206V70a60 60 0 0 1 120 0v136"/>
+              <use href="#bottle" class="f-bottle-l" x="90" y="60" width="40" height="140"/>
+              <rect class="f-gold" x="40" y="204" width="140" height="3"/>
+              <g transform="translate(150 214)">
+                <path class="s-gold" stroke-width="2.5" d="M5 8V4a5 5 0 0 1 10 0v4"/>
+                <rect class="f-gold" x="2" y="8" width="16" height="13" rx="2"/>
+              </g>
+            </svg>
+            <p class="label">Adega · aqui se obedece</p>
+          </div>
+        </div>
+        <figcaption class="caption">O líquido é o mesmo.</figcaption>
+      </figure>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Ninguém regateia na adega com cadeado. Todo mundo regateia na gôndola de promoção. Mesmo vinho. O que mudou é o ambiente que diz ao cérebro do comprador ‘aqui se negocia’ ou ‘aqui se obedece’.</p>
+        <p>Sua proposta é o líquido. O frame é a garrafa, a luz, o cadeado. Quando você entra na sala pedindo licença, você acabou de colocar sua solução na gôndola de promoção. O desconto que vai sair no final foi decidido na porta.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-3" data-module="1" data-num="3" data-title="Lei da absorção">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 1 <span class="dim">· Slide 03</span></p>
+      <h2 class="title">Lei da absorção: <em>o frame mais frio engole o mais quente</em></h2>
+    </header>
+    <div class="cols center">
+      <ul class="topics">
+        <li>Dois frames não coexistem: um absorve o outro</li>
+        <li>Quem se agita revela necessidade; necessidade é sangue na água</li>
+        <li>Calma não é educação: é <strong>demonstração de alternativa</strong></li>
+      </ul>
+      <figure class="visual">
+        <div class="frames">
+          <div class="frame">
+            <svg viewBox="0 0 220 160" role="img" aria-label="Lago completamente parado: uma linha reta">
+              <rect class="f-panel" width="220" height="160"/>
+              <path class="s-calm" stroke-width="2" d="M14 80h192"/>
+              <path class="s-calm-d" stroke-width="1" d="M40 92h140M70 102h80M95 112h30"/>
+            </svg>
+            <p class="label">Frame frio · absorve</p>
+          </div>
+          <div class="frame">
+            <svg viewBox="0 0 220 160" role="img" aria-label="Tempestade: linhas agitadas e irregulares">
+              <rect class="f-panel" width="220" height="160"/>
+              <path class="s-storm" stroke-width="2" stroke-linejoin="round" d="M14 80l12-26 10 44 12-60 9 52 13-30 8 40 14-64 10 50 12-22 9 38 13-56 10 46 12-28 9 30 12-18 10 24"/>
+              <path class="s-storm" stroke-width="1" opacity=".5" stroke-linejoin="round" d="M14 112l14-14 12 22 14-28 10 18 14-12 12 20 16-26 12 16 14-10 12 18 16-20 14 14 12-8"/>
+              <path class="s-storm" stroke-width="1" opacity=".35" stroke-linejoin="round" d="M14 46l16 10 14-18 12 14 16-12 12 16 14-14 16 12 14-16 14 10 16-8 12 12 18-10"/>
+            </svg>
+            <p class="label">Frame quente · é absorvido</p>
+          </div>
+        </div>
+        <figcaption class="caption">O predador não corre atrás. Espera a presa se mexer.</figcaption>
+      </figure>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Repare em como o predador caça: ele não corre atrás. Ele espera a presa se mexer. Quem se mexe primeiro se denuncia.</p>
+        <p>Na mesa é exatamente isso. O vendedor que fala rápido, que preenche silêncio, que se justifica, está mostrando que precisa daquele contrato. E o comprador sente isso como cheiro. A partir daí, cada concessão é só ele cobrando o preço do seu desespero.</p>
+        <p>O frame mais forte é sempre o mais frio. Não porque calma é bonito, mas porque calma comunica uma mensagem brutal: eu tenho outras opções.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-4" data-module="1" data-num="4" data-title="Radar de dominância">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 1 <span class="dim">· Slide 04</span></p>
+      <h2 class="title">Radar de dominância: <em>5 sinais de quem está no comando</em></h2>
+    </header>
+    <div class="radar-tool">
+      <div class="radar-box">
+        <svg class="radar" id="radar-svg" viewBox="-72 4 444 276" role="img" aria-label="Radar de dominância com cinco sinais"></svg>
+        <p class="verdict" id="radar-verdict" aria-live="polite"></p>
+      </div>
+      <fieldset class="signals" id="radar-signals">
+        <legend>Leitura de exemplo: a reunião do “Antes” (slide 5). Marque de quem é cada ponto na sua próxima reunião.</legend>
+        <div class="signal">
+          <div><p class="signal-name">Perguntas</p><p class="signal-q">Quem pergunta interroga; quem responde é interrogado</p></div>
+          <div class="seg"><input type="radio" name="sig-0" id="sig-0-seu" value="seu"><label for="sig-0-seu">Seu</label><input type="radio" name="sig-0" id="sig-0-dele" value="dele" checked><label for="sig-0-dele">Dele</label></div>
+        </div>
+        <div class="signal">
+          <div><p class="signal-name">Agenda</p><p class="signal-q">Quem fixou a agenda e o relógio</p></div>
+          <div class="seg"><input type="radio" name="sig-1" id="sig-1-seu" value="seu"><label for="sig-1-seu">Seu</label><input type="radio" name="sig-1" id="sig-1-dele" value="dele" checked><label for="sig-1-dele">Dele</label></div>
+        </div>
+        <div class="signal">
+          <div><p class="signal-name">Justificativa</p><p class="signal-q">Quem está se explicando</p></div>
+          <div class="seg"><input type="radio" name="sig-2" id="sig-2-seu" value="seu"><label for="sig-2-seu">Seu</label><input type="radio" name="sig-2" id="sig-2-dele" value="dele" checked><label for="sig-2-dele">Dele</label></div>
+        </div>
+        <div class="signal">
+          <div><p class="signal-name">Ritmo</p><p class="signal-q">Quem está com pressa</p></div>
+          <div class="seg"><input type="radio" name="sig-3" id="sig-3-seu" value="seu"><label for="sig-3-seu">Seu</label><input type="radio" name="sig-3" id="sig-3-dele" value="dele" checked><label for="sig-3-dele">Dele</label></div>
+        </div>
+        <div class="signal">
+          <div><p class="signal-name">Próximo passo</p><p class="signal-q">Quem decide o que acontece depois da reunião</p></div>
+          <div class="seg"><input type="radio" name="sig-4" id="sig-4-seu" value="seu"><label for="sig-4-seu">Seu</label><input type="radio" name="sig-4" id="sig-4-dele" value="dele" checked><label for="sig-4-dele">Dele</label></div>
+        </div>
+      </fieldset>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Vocês vão rodar esse radar em toda reunião, a cada cinco minutos.</p>
+        <p>Pense numa sala de interrogatório. Quem faz as perguntas tem o poder; quem responde está sendo avaliado. Quem fixou o relógio decide quando a pressão sobe. Quem está se explicando é o réu. Quem está com pressa está exposto. E quem decide o próximo passo é quem vai ganhar a próxima rodada também.</p>
+        <p>Três pontos do lado dele? Você está no banco dos réus. E vocês vão aprender a trocar de cadeira no meio da sessão.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-5" data-module="1" data-num="5" data-title="Autópsia de um vendedor subserviente">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 1 <span class="dim">· Slide 05</span></p>
+      <h2 class="title">Autópsia de um <em>vendedor subserviente</em></h2>
+    </header>
+    <ul class="topics">
+      <li>Pede licença para ocupar espaço</li>
+      <li>Entrega informação antes de extrair informação</li>
+      <li>Revela o preço sem ancorar valor</li>
+      <li>Terceiriza a autoridade (“vou ver com meu gestor”)</li>
+    </ul>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Vendedor subserviente</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Marcos, muito obrigado, sei que sua agenda é uma loucura. Posso te mostrar rapidinho quem a gente é?<span class="note">Autópsia: pede licença para ocupar espaço</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Tenho 15 minutos.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Ótimo, vou ser bem objetivo! <span class="cue">[30 slides institucionais]</span><span class="note">Autópsia: aceita o relógio dele e entrega informação antes de extrair</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Quanto é?</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">R$ 48 mil, mas dá pra conversar.<span class="note">Autópsia: revela o preço sem ancorar valor, com a porta aberta</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">O outro fornecedor faz por 39.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Deixa eu ver com meu gestor o que consigo.<span class="note">Autópsia: terceiriza a autoridade</span></span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="sub">Vendedor dominante</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Tenho 15 minutos.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say"><span class="cue">[sem pressa, senta, fecha o notebook]</span> Quinze minutos dão para uma coisa só: descobrir se vale a pena a gente ter uma segunda reunião. Eu vou fazer algumas perguntas duras sobre a operação de vocês. Se no final eu achar que não somos a solução, eu te digo isso na cara. Justo?<span class="note">Fecha o notebook · reenquadra os 15 minutos como filtro dele · pede o “justo”</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">…Justo.<span class="note">Primeiro compromisso verbal da reunião</span></span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Quantas rupturas de estoque vocês tiveram no último trimestre?</span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Autópsia. Ele agradeceu como quem recebe esmola. Aceitou o relógio do comprador. Despejou 30 slides sem extrair um único dado. Soltou o preço com uma porta aberta: ‘dá pra conversar’. E, no primeiro tiro, entregou que não manda em nada.</p>
+        <p>Agora o ‘Depois’. Três movimentos em vinte segundos. Fechar o notebook: eu não vim apresentar, vim avaliar. Reenquadrar os 15 minutos como um filtro dele, não do cliente. E o golpe: arrancar um ‘justo’. Aquela palavrinha é o primeiro compromisso verbal da reunião. Ele acabou de concordar com as suas regras. E gente que concorda com as regras no começo tem dificuldade enorme de quebrá-las no final, porque isso o faria parecer incoerente. Guardem isso. Vamos usar essa alavanca o treinamento inteiro.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ===================== MÓDULO 2 ===================== -->
+<section class="slide" id="modulo-2" data-module="2" data-title="Módulo 2">
+  <div class="slide-inner divider">
+    <p class="big-n">2</p>
+    <p class="eyebrow">Módulo 2 de 4 <span class="dim">· 55 min · Slides 6–13</span></p>
+    <h2>Juiz, Premiação Absoluta e Perda</h2>
+    <p class="lede">Arma central: <strong style="color:var(--gold-hi)">inverter quem é avaliado</strong>.</p>
+    <ol class="agenda" data-agenda="2"></ol>
+  </div>
+</section>
+
+<section class="slide" id="slide-6" data-module="2" data-num="6" data-title="O arsenal: três armas, uma sequência">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 06</span></p>
+      <h2 class="title">O arsenal: <em>três armas, uma sequência</em></h2>
+    </header>
+    <ol class="weapons">
+      <li class="weapon-card">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"><rect x="22" y="6" width="28" height="14" rx="2" transform="rotate(40 36 13)"/><path d="M31 21 13 43"/><path d="M8 56h30"/><rect x="12" y="49" width="22" height="7" rx="1.5"/></g></svg>
+        <p class="label">Martelo</p>
+        <h3>Você julga, ele se defende</h3>
+        <p>Inverte o tribunal: quem está sendo julgado é o cliente, não a sua proposta.</p>
+      </li>
+      <li class="weapon-card">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 18v36M54 18v36M4 56h12M48 56h12"/><circle cx="10" cy="14" r="3.5"/><circle cx="54" cy="14" r="3.5"/></g><path class="s-velvet" fill="none" stroke-width="4" stroke-linecap="round" d="M10 22c10 20 34 20 44 0"/></svg>
+        <p class="label">Corda de veludo</p>
+        <h3>Ele precisa merecer entrar</h3>
+        <p>Inverte a necessidade: é ele que precisa passar pela porta.</p>
+      </li>
+      <li class="weapon-card">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"><path d="M16 6h32M16 58h32"/><path d="M20 6c0 14 10 18 10 26S20 44 20 58M44 6c0 14-10 18-10 26s10 12 10 26"/></g><path fill="currentColor" d="M23 56c1-7 6-10 9-11 3 1 8 4 9 11z"/><path fill="currentColor" d="M30.5 30h3v2h-3z"/></svg>
+        <p class="label">Ampulheta</p>
+        <h3>Cada dia parado custa caro, e ele sabe quanto</h3>
+        <p>Inverte a pressa: o tempo passa a correr contra ele.</p>
+      </li>
+    </ol>
+    <p class="caption">Uma arma isolada incomoda. As três em sequência deixam o comprador sem chão.</p>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Três armas, nessa ordem. O martelo inverte o tribunal: quem está sendo julgado é o cliente, não a sua proposta. A corda de veludo inverte a necessidade: é ele que precisa passar pela porta. A ampulheta inverte a pressa: o tempo passa a correr contra ele.</p>
+        <p>Uma arma isolada incomoda. As três em sequência deixam o comprador sem chão.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-7" data-module="2" data-num="7" data-title="Juiz, não réu">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 07</span></p>
+      <h2 class="title">Juiz, <em>não réu</em></h2>
+    </header>
+    <div class="cols">
+      <ul class="topics">
+        <li>Réu apresenta provas; juiz faz perguntas</li>
+        <li>Não mostre a solução antes de o cliente <strong>confessar o problema</strong></li>
+        <li>Perguntas de interrogatório: específicas, numéricas, em sequência</li>
+        <li>Registre cada resposta: elas viram provas depois</li>
+      </ul>
+      <div class="court">
+        <div class="seat reu">
+          <p class="label">Banco dos réus</p>
+          <h3>Vendedor subserviente</h3>
+          <ul><li>Traz provas, cases, certificações</li><li>Implora por um veredito favorável</li><li>Está sendo julgado</li></ul>
+        </div>
+        <div class="seat juiz">
+          <p class="label">Cadeira do juiz</p>
+          <h3>Vendedor dominante</h3>
+          <ul><li>Não prova nada: pergunta</li><li>Perguntas fechadas, numéricas, uma atrás da outra</li><li>Anota tudo, caderno aberto</li></ul>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;gap:12px">
+      <p class="label">Interrogatório, nessa ordem</p>
+      <ol class="questions">
+        <li>Quantas rupturas?</li>
+        <li>Quanto custa cada uma?</li>
+        <li>Quem responde por isso?</li>
+        <li>O que o diretor disse da última vez?</li>
+      </ol>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>O vendedor subserviente entra no tribunal como réu: traz provas, cases, certificações, e implora por um veredito favorável. Só que réu, por definição, está sendo julgado.</p>
+        <p>O juiz não prova nada. O juiz pergunta. E aqui entra a técnica de interrogatório: perguntas fechadas, numéricas, uma atrás da outra, sem dar tempo de o cliente construir narrativa. ‘Quantas rupturas? Quanto custa cada uma? Quem responde por isso? O que o diretor disse da última vez?’</p>
+        <p>E anotem tudo na frente dele. Literalmente, caderno aberto. Isso tem dois efeitos: ele percebe que está sendo avaliado, e cada número que ele disser vira um depoimento que vai ser usado no fechamento. Ele não vai conseguir desdizer o próprio número.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-8" data-module="2" data-num="8" data-title="O interrogatório em ação">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 08</span></p>
+      <h2 class="title">O interrogatório <em>em ação</em></h2>
+    </header>
+    <div class="cols">
+      <ul class="topics">
+        <li>Abra com regras, não com apresentação</li>
+        <li>Escada de perguntas: fato → número → consequência → culpado</li>
+        <li>Repita o número dele em voz alta: <strong>confirmação = compromisso</strong></li>
+      </ul>
+      <ol class="stairs" aria-label="Escada de perguntas">
+        <li class="step" style="--i:0"><p class="label">Fato</p><b>Rupturas de estoque</b><span>no último trimestre</span></li>
+        <li class="step" style="--i:1"><p class="label">Número</p><b>“Umas doze.”</b><span>anotado na frente dele</span></li>
+        <li class="step" style="--i:2"><p class="label">Consequência</p><b>“Uns R$ 6 mil.”</b><span>cada uma, em venda perdida</span></li>
+        <li class="step" style="--i:3"><p class="label">Culpado</p><b>“…Eu.”</b><span>quem é cobrado na reunião de resultado</span></li>
+      </ol>
+    </div>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Uma pilha de slides</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Deixa eu te mostrar nossos cases, atendemos grandes marcas, temos 15 anos de mercado…</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Todo fornecedor me diz isso.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Verdade, mas a gente realmente é diferente, olha esse aqui…</span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="stamp">Depoimento</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Quantas rupturas de estoque no último trimestre?</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Umas doze.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Doze. <span class="cue">[anota]</span> Cada uma custa quanto em venda perdida?</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Uns R$ 6 mil.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">E quem é cobrado por isso na reunião de resultado?</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">…Eu.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Então deixa eu confirmar o que você me disse: doze rupturas, R$ 6 mil cada, e a conta cai no seu colo. Está correto?</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Está.<span class="note">Armadilha de coerência armada</span></span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Repararam na escada? Fato, número, consequência e, por último, a pergunta cirúrgica: quem paga por isso? Quando ele responde ‘eu’, a negociação deixou de ser sobre a sua empresa e passou a ser sobre a pele dele.</p>
+        <p>E o fechamento do bloco é uma armadilha de coerência: você resume o depoimento e pede confirmação. ‘Está correto?’ Ele confirma. Agora ele assinou, verbalmente, que tem um problema caro, recorrente e pessoal. Daqui a vinte minutos, quando ele disser ‘não é prioridade’, você só precisa repetir a confissão dele.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-9" data-module="2" data-num="9" data-title="Premiação Absoluta: a corda de veludo">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 09</span></p>
+      <h2 class="title">Premiação Absoluta: <em>a corda de veludo</em></h2>
+    </header>
+    <div class="cols">
+      <ul class="topics">
+        <li>Você seleciona clientes; não persegue clientes</li>
+        <li>Critérios de entrada explícitos (porte, urgência, patrocinador)</li>
+        <li>Desqualifique em voz alta: quem ouve “talvez não seja para você” corre atrás</li>
+        <li>Use apenas <strong>restrições reais</strong>: agenda, equipe, capacidade</li>
+      </ul>
+      <div style="display:grid;gap:16px">
+        <svg class="rope" viewBox="0 0 400 90" aria-hidden="true">
+          <g class="s-gold" stroke-width="3" stroke-linecap="round"><path d="M30 20v62M370 20v62M14 84h32M354 84h32"/><circle cx="30" cy="14" r="6"/><circle cx="370" cy="14" r="6"/></g>
+          <path class="s-velvet" fill="none" stroke-width="7" stroke-linecap="round" d="M30 26C120 76 280 76 370 26"/>
+        </svg>
+        <p class="label">Critérios de entrada</p>
+        <ul class="criteria"><li>Porte</li><li>Urgência</li><li>Patrocinador</li></ul>
+        <p class="quote">“A gente só implanta em empresas que têm patrocinador na diretoria e janela de 60 dias. Não sei se é o caso de vocês.”</p>
+      </div>
+    </div>
+    <div class="warn">
+      <p class="label">A corda tem que ser real</p>
+      <p>Agenda de implantação, time alocado, capacidade de entrega. Quando você inventa fila, o cliente liga para o seu concorrente e descobre que o clube está vazio.</p>
+    </div>
+    <p class="caption">Ninguém implora para entrar onde qualquer um entra.</p>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>A corda de veludo não está ali para impedir ninguém. Está ali para fazer quem está do lado de fora querer entrar.</p>
+        <p>Na mesa, a Premiação Absoluta é você ter critérios para aceitar o cliente — e dizer isso. ‘A gente só implanta em empresas que têm patrocinador na diretoria e janela de 60 dias. Não sei se é o caso de vocês.’ Pronto: a pergunta deixou de ser ‘eu compro deles?’ e virou ‘será que eu passo?’.</p>
+        <p>E aqui vai um aviso de quem já viu muita conta explodir: a corda tem que ser real. Agenda de implantação, time alocado, capacidade de entrega — você tem limites de verdade, use-os. Quando você inventa fila, o cliente liga para o seu concorrente e descobre que o clube está vazio. A partir daí, nenhuma corda sua vale nada.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-10" data-module="2" data-num="10" data-title="O descarte calculado">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 10</span></p>
+      <h2 class="title">O descarte <em>calculado</em></h2>
+    </header>
+    <ul class="topics">
+      <li>Cliente sumido não se persegue: se descarta</li>
+      <li>A mensagem de descarte devolve a decisão para ele</li>
+      <li>A perda tem que ser <strong>concreta e real</strong> (vaga, condição, prazo)</li>
+    </ul>
+    <div class="phones">
+      <div class="phone-col antes">
+        <div class="phone">
+          <div class="phone-top"><b>Fernanda</b><span>Compras</span></div>
+          <p class="bubble">Oi Fernanda, tudo bem? Conseguiu ver a proposta? 😊</p>
+          <p class="bubble">Só passando para lembrar!</p>
+          <p class="bubble">Consigo 10% de desconto se fecharmos este mês, me avisa!</p>
+          <p class="seen">Visualizada · sem resposta</p>
+        </div>
+        <p class="label">Antes · vendedor subserviente</p>
+      </div>
+      <div class="phone-col depois">
+        <div class="phone dom">
+          <div class="phone-top"><b>Fernanda</b><span>Compras</span></div>
+          <p class="bubble">Fernanda, pelo silêncio, entendo que resolver as rupturas deixou de ser prioridade para vocês. Vou encerrar o processo e liberar a janela de implantação de novembro para a próxima empresa da fila. Se mudar algo, me chama.</p>
+        </div>
+        <p class="label">Depois · vendedor dominante</p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>A terceira mensagem do ‘Antes’ é a mais cara do treinamento: você pagou 10% para alguém que te ignorou. Ensinou o cliente que sumir dá dinheiro.</p>
+        <p>O descarte faz o contrário. Ele usa a aversão a ser rejeitado: ninguém gosta de ser dispensado, especialmente por um fornecedor. E ele coloca o problema de volta no colo dela — repare que a mensagem cita as rupturas, que foi o que ela confessou. Ela não está perdendo um fornecedor; está escolhendo continuar com o problema. Na maioria das vezes, a resposta chega em horas.</p>
+        <p>Condição de ouro: a janela de novembro tem que existir. Se ela responder ‘segura a vaga’, você precisa ter vaga para segurar.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-11" data-module="2" data-num="11" data-title="Perda: o pânico controlado da inércia">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 11</span></p>
+      <h2 class="title">Perda: <em>o pânico controlado da inércia</em></h2>
+    </header>
+    <div class="cols center">
+      <ul class="topics">
+        <li>Perder dói cerca de 2x mais do que ganhar alegra (Kahneman &amp; Tversky)</li>
+        <li>Nunca venda ganho futuro; exponha a perda presente</li>
+        <li>Converta o problema em perda diária, com os números dele</li>
+        <li>Personalize: a perda tem nome e sobrenome (o dele)</li>
+      </ul>
+      <figure class="visual">
+        <div class="bars" role="img" aria-label="Gráfico: a dor de perder tem o dobro da altura do prazer de ganhar">
+          <div class="bar win"><b>1×</b><i></i></div>
+          <div class="bar loss"><b>≈2×</b><i></i></div>
+        </div>
+        <div class="bar-labels"><span class="label">Prazer de ganhar</span><span class="label">Dor de perder</span></div>
+        <figcaption class="source">Aversão à perda, Kahneman &amp; Tversky. Barras em escala.</figcaption>
+      </figure>
+    </div>
+    <div class="contrast">
+      <p class="weak">“Você vai crescer.”</p>
+      <p class="strong">“Você está sangrando R$ 1.100 por dia útil, e o seu nome está do lado desse número.”</p>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>O cérebro humano não foi feito para buscar ganho. Foi feito para não morrer. Por isso, a dor de perder pesa mais ou menos o dobro do prazer de ganhar.</p>
+        <p>O vendedor subserviente fala ‘você vai crescer’. Ninguém sente urgência por crescer. O vendedor dominante fala ‘você está sangrando R$ 1.100 por dia útil, e o seu nome está do lado desse número’. Isso gera aquilo que eu chamo de pânico controlado: desconforto suficiente para tirar ele da cadeira, mas apoiado em números que ele mesmo te deu, então ele não tem como acusar você de exagero.</p>
+        <p>E repare no último tópico: a perda mais forte não é da empresa. É a pessoal. Bônus, reputação, a próxima reunião com o diretor. É aí que mora a urgência de verdade.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-12" data-module="2" data-num="12" data-title="A conta que ele mesmo fez">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 12</span></p>
+      <h2 class="title">A conta que <em>ele mesmo fez</em></h2>
+    </header>
+    <ul class="topics">
+      <li>Ele dá os números; você só multiplica em voz alta</li>
+      <li>Converta para a menor unidade de tempo (dia, semana)</li>
+      <li>Encerre com a pergunta binária que não tem saída coerente</li>
+    </ul>
+    <div class="calc" id="calc">
+      <div class="calc-in">
+        <p class="label" style="color:var(--gold)">Calculadora · use os números do seu cliente</p>
+        <div class="field"><label for="calc-problema">O problema, nas palavras dele</label><input id="calc-problema" type="text" value="rupturas" autocomplete="off"></div>
+        <div class="field"><label for="calc-qtd">Quantas por trimestre</label><input id="calc-qtd" type="number" inputmode="decimal" min="0" step="1" value="12"></div>
+        <div class="field"><label for="calc-custo">Custo de cada uma (R$)</label><input id="calc-custo" type="number" inputmode="decimal" min="0" step="100" value="6000"></div>
+        <div class="field"><label for="calc-preco">Preço da sua proposta (R$)</label><input id="calc-preco" type="number" inputmode="decimal" min="0" step="1000" value="48000"></div>
+      </div>
+      <div class="calc-out">
+        <div class="lcd"><span class="label">Perda por ano</span><output id="calc-ano" for="calc-qtd calc-custo">R$ 288.000 <small>/ ano</small></output></div>
+        <div class="tagrow">
+          <span class="pricetag" id="calc-tag">R$ 48.000</span>
+          <p class="ratio" id="calc-ratio">A perda anual é <b>6,0×</b> o preço.</p>
+        </div>
+        <dl class="calc-rows">
+          <dt>Perda por trimestre</dt><dd id="calc-tri">R$ 72.000</dd>
+          <dt>Perda por dia útil (252 dias úteis no ano)</dt><dd id="calc-dia">R$ 1.143</dd>
+        </dl>
+        <div class="calc-say">
+          <p class="label">Fala pronta, com os números dele</p>
+          <p id="calc-fala1">Vamos usar os seus números, não os meus. 12 rupturas por trimestre, R$ 6.000 cada. São R$ 72.000 por trimestre, R$ 288.000 por ano. Dá uns R$ 1.143 por dia útil, todo dia, inclusive hoje. Bate?</p>
+          <p id="calc-fala2">Então só me ajuda a entender uma coisa: R$ 48.000 é caro comparado com R$ 288.000 de perda que você mesmo calculou?</p>
+          <p class="calc-warn" id="calc-warn" hidden>Com esses números a perda anual não supera o preço, e a armadilha não fecha. Volte ao interrogatório e levante os custos reais que faltam. Nunca aumente o número por conta própria.</p>
+        </div>
+      </div>
+    </div>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Vendedor subserviente</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Achei caro.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Mas olha tudo o que está incluso, suporte, treinamento… e se pagar à vista eu consigo 5%.</span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="sub">Vendedor dominante</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Achei caro.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Vamos usar os seus números, não os meus. Doze rupturas por trimestre, R$ 6 mil cada. São R$ 72 mil por trimestre, quase R$ 290 mil por ano. Dá uns R$ 1.100 por dia útil, todo dia, inclusive hoje. Bate?</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">…Bate.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Então só me ajuda a entender uma coisa: R$ 48 mil é caro comparado com R$ 290 mil de perda que você mesmo calculou?</span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Essa é a primeira armadilha lógica completa. Olhem o desenho: os números são dele. A multiplicação é aritmética. A confirmação foi dele: ‘bate’. E a pergunta final só tem duas respostas. Se ele disser ‘sim, é caro’, está dizendo que prefere perder R$ 290 mil a gastar R$ 48 mil — e nenhum comprador sobrevive a essa frase na frente do chefe. Se disser ‘não’, acabou de concordar com o seu preço.</p>
+        <p>Não tem saída coerente. E vocês não inventaram nada. Só devolveram a ele o espelho.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-13" data-module="2" data-num="13" data-title="A sequência letal">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 2 <span class="dim">· Slide 13</span></p>
+      <h2 class="title">A sequência letal: <em>Martelo → Corda → Ampulheta</em></h2>
+    </header>
+    <ol class="stairs" aria-label="Sequência da reunião">
+      <li class="step" style="--i:0"><p class="label">Abertura · Martelo</p><b>Juiz</b><span>Regras + interrogatório + confirmação</span></li>
+      <li class="step" style="--i:1"><p class="label">Meio · Corda</p><b>Premiação</b><span>Critérios de entrada, desqualificação</span></li>
+      <li class="step" style="--i:2"><p class="label">Fechamento · Ampulheta</p><b>Perda</b><span>A conta dele + pergunta binária</span></li>
+      <li class="step" style="--i:3"><p class="label">Assinatura</p><b>Sinal de vitória</b><span>Ele começa a se justificar para você</span></li>
+    </ol>
+    <aside class="drill">
+      <p class="label" style="color:var(--gold)">Dinâmica · 15 min · Sala de interrogatório</p>
+      <div class="drill-cols">
+        <div>
+          <p class="drill-k">Formato original, em trios</p>
+          <p>O vendedor tem 5 minutos para arrancar três números e uma confirmação verbal do comprador. O observador marca no radar do slide 4 em que minuto a mesa virou.</p>
+        </div>
+        <div>
+          <p class="drill-k">Versão 1 a 1: Diogo e Lucas</p>
+          <p>Lucas faz o comprador. Diogo tem 5 minutos para arrancar três números e um “está correto”. Gravem o áudio no celular, ouçam juntos e marquem no radar em que minuto a mesa virou.</p>
+          <button class="linkbtn" type="button" data-go="slide-4">Abrir o radar</button>
+        </div>
+      </div>
+    </aside>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>A sequência é sempre essa. Você abre como juiz e coleta depoimentos. No meio, coloca a corda de veludo e faz ele provar que merece. E fecha com a ampulheta, usando o depoimento dele como arma.</p>
+        <p>E o sinal de que a mesa virou é inconfundível: o comprador começa a se explicar. ‘É que o nosso processo de aprovação é lento.’ ‘É que eu preciso convencer o financeiro.’ Quando o réu começa a se defender, o juiz já sabe o veredito.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ===================== MÓDULO 3 ===================== -->
+<section class="slide" id="modulo-3" data-module="3" data-title="Módulo 3">
+  <div class="slide-inner divider">
+    <p class="big-n">3</p>
+    <p class="eyebrow">Módulo 3 de 4 <span class="dim">· 60 min · Slides 14–21</span></p>
+    <h2>Contra-ataque psicológico</h2>
+    <p class="lede">Arma central: <strong style="color:var(--gold-hi)">silêncio, rotulação e armadilha de coerência</strong>.</p>
+    <ol class="agenda" data-agenda="3"></ol>
+  </div>
+</section>
+
+<section class="slide" id="slide-14" data-module="3" data-num="14" data-title="Todo ataque é uma sonda">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 14</span></p>
+      <h2 class="title">Todo ataque é <em>uma sonda</em></h2>
+    </header>
+    <ul class="topics">
+      <li>Agressividade do comprador é teste de resistência, não veredito</li>
+      <li>Defender = virar réu; ceder = confirmar que ele manda</li>
+      <li>Terceira via: <strong>absorver, devolver, encurralar</strong></li>
+    </ul>
+    <ul class="routes">
+      <li class="route no"><p class="label"><span class="xmark" aria-hidden="true"></span>Caminho 1</p><h3>Defender</h3><p>Você virou réu.</p></li>
+      <li class="route no"><p class="label"><span class="xmark" aria-hidden="true"></span>Caminho 2</p><h3>Ceder</h3><p>Ele aprendeu que bater funciona e vai bater de novo na renovação.</p></li>
+      <li class="route yes"><p class="label">Terceira via</p><h3>Absorver, devolver, encurralar</h3><p>Use o impulso dele para derrubá-lo.</p></li>
+    </ul>
+    <p class="caption">A força dele é a sua alavanca.</p>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Quando o comprador bate na mesa, ele está fazendo uma sonda: ‘até onde esse cara cede?’. Se você defende, virou réu. Se cede, ele aprendeu que bater funciona e vai bater de novo na renovação.</p>
+        <p>O judoca não segura o golpe. Ele usa o impulso do outro para derrubá-lo. É isso que vamos fazer com cada ataque: transformar a energia dele no chão em que ele vai cair.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-15" data-module="3" data-num="15" data-title="O protocolo S.R.E.">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 15</span></p>
+      <h2 class="title">O protocolo S.R.E.: <em>Silêncio, Rotulação, Encurralamento</em></h2>
+    </header>
+    <ol class="sre">
+      <li><span class="letter" aria-hidden="true">S</span><h3>Silêncio</h3><p>3 a 5 segundos depois do ataque, olho no olho.</p></li>
+      <li><span class="letter" aria-hidden="true">R</span><h3>Rotulação</h3><p>Nomeie a emoção ou o medo por trás do ataque. “Parece que você está sendo pressionado por custo.”</p></li>
+      <li><span class="letter" aria-hidden="true">E</span><h3>Encurralamento</h3><p>Devolva uma pergunta construída com as palavras dele.</p></li>
+    </ol>
+    <div class="silence">
+      <div class="silence-ring">
+        <svg viewBox="0 0 84 84" aria-hidden="true"><circle class="ring-bg" cx="42" cy="42" r="36"/><circle class="ring-fg" id="ring-fg" cx="42" cy="42" r="36"/></svg>
+        <span class="silence-n" id="silence-n">5</span>
+      </div>
+      <div class="silence-txt">
+        <p class="state" id="silence-state" aria-live="polite">Treine o silêncio: cinco segundos parecem uma eternidade na mesa.</p>
+        <button class="linkbtn" type="button" id="silence-btn">Começar 5 segundos de silêncio</button>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Silêncio primeiro. Três a cinco segundos depois de um ataque, sem desviar o olhar. Na nossa cultura, silêncio em conversa é desconfortável, e o desconforto sobe do lado de quem atacou — porque ele esperava reação. Muitas vezes ele mesmo quebra o silêncio e suaviza o que disse. Você ganhou terreno sem falar uma palavra.</p>
+        <p>Rotulação: técnica de Chris Voss, ex-negociador de reféns do FBI. Você nomeia o que está por trás: ‘Parece que você está sendo pressionado por custo’. Rótulo certo desarma; rótulo errado faz ele te corrigir e revelar o que realmente está acontecendo. Você ganha nas duas.</p>
+        <p>Encurralamento: a resposta final é uma pergunta montada com as palavras e os números que ele já te deu. Ele não está discutindo com você. Está discutindo consigo mesmo.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-16" data-module="3" data-num="16" data-title="Ataque: Esse preço é um absurdo">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 16 · Ataque 1 de 5</span></p>
+      <h2 class="title quote">Esse preço é um absurdo</h2>
+    </header>
+    <ul class="topics">
+      <li>Absurdo é emoção; force-o a virar <strong>critério</strong></li>
+      <li>Puxe a confissão do Módulo 2 de volta para a mesa</li>
+      <li>Pergunta final binária</li>
+    </ul>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Vendedor subserviente</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Esse preço é um absurdo.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Entendo, mas temos ISO, suporte 24h, somos líderes há 15 anos… Vou ver se consigo uns 10%.</span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="sub">Vendedor dominante</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Esse preço é um absurdo.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say"><span class="cue">[5 segundos de silêncio]</span> Absurdo comparado com o quê?<span class="note">Emoção vira critério</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Com o que eu pago hoje.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">E o que você paga hoje resolve as doze rupturas que você me contou?<span class="note">Puxa a confissão de volta</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Não.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Então, se eu entendi, hoje você paga menos por algo que não resolve um problema de R$ 290 mil que cai no seu colo. O absurdo está em qual das duas contas?<span class="note">Pergunta binária</span></span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Olhem a armadilha. ‘Comparado com o quê?’ obriga ele a declarar o critério. Ele declara: o fornecedor atual. Aí você puxa a confissão: o atual resolve? Ele já disse que não, há vinte minutos, com você anotando. E a pergunta final coloca as duas contas lado a lado e pede para ele apontar qual é absurda. Qualquer resposta que não seja ceder o faz parecer incoerente.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-17" data-module="3" data-num="17" data-title="Ataque: O concorrente faz mais barato">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 17 · Ataque 2 de 5</span></p>
+      <h2 class="title quote">O concorrente faz mais barato</h2>
+    </header>
+    <ul class="topics">
+      <li>Não ataque o concorrente: <strong>libere o cliente</strong> para ir com ele</li>
+      <li>A liberação desarma; a comparação de escopo encurrala</li>
+      <li>Faça ele assumir o risco em voz alta</li>
+    </ul>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Vendedor subserviente</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">A empresa X faz por R$ 39 mil.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Ah, mas o suporte deles é péssimo, ouvi dizer que… Tá, consigo R$ 42.</span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="sub">Vendedor dominante</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">A empresa X faz por R$ 39 mil.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say"><span class="cue">[silêncio]</span> Então você deveria fechar com eles.<span class="note">Liberação: tira o chão dele</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">…Como assim?</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Se o escopo é igual, seria irresponsável da sua parte pagar R$ 9 mil a mais. A proposta deles garante integração com o seu ERP e cobre as rupturas?<span class="note">Comparação de escopo</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Não exatamente.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Então você está comparando um preço com uma solução. Se fechar com eles e as doze rupturas continuarem, quem explica para o diretor a economia de R$ 9 mil?<span class="note">Risco pessoal, em voz alta</span></span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>‘Você deveria fechar com eles.’ Essa frase é um choque, porque ele estava preparado para uma briga. Você tira o chão dele. Ele é forçado a defender o seu lado para não parecer que está comprando errado.</p>
+        <p>E o tiro final é responsabilidade pessoal: ‘quem explica para o diretor?’. Voltamos à perda pessoal do Módulo 2. Ele não está mais escolhendo fornecedor. Está escolhendo qual risco vai carregar com o próprio nome.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-18" data-module="3" data-num="18" data-title="Ataque: Ou baixa 15% ou não fecho até amanhã">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 18 · Ataque 3 de 5</span></p>
+      <h2 class="title quote">Ou baixa 15% ou não fecho até amanhã</h2>
+    </header>
+    <ul class="topics">
+      <li>Ultimato de prazo serve para desligar seu raciocínio</li>
+      <li>Descubra o que está por trás do relógio</li>
+      <li>Nunca conceda sem tomar: <strong>toda concessão tem preço</strong></li>
+      <li>Termine com duas opções suas</li>
+    </ul>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Vendedor subserviente</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Ou baixa 15% ou não fecho até amanhã.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Nossa… tá, deixa eu correr com a diretoria hoje!</span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="sub">Vendedor dominante</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Ou baixa 15% ou não fecho até amanhã.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say"><span class="cue">[silêncio]</span> O que acontece amanhã?<span class="note">Descobre o que está por trás do relógio</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Fecha o orçamento do trimestre.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Então o seu problema não é preço, é garantir a verba antes que ela suma. Eu consigo resolver isso. Opção um: preço cheio, assinatura amanhã, implantação em novembro. Opção dois: dividimos em duas fases para caber no trimestre, com o contrato de 24 meses. Os 15% eu não dou, porque reduziria a garantia de ruptura que é exatamente o que te protege. Qual das duas você leva para o financeiro?<span class="note">Escolha ilusória: duas opções, ambas suas</span></span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Quem impõe um ultimato está, na verdade, revelando a própria pressão. ‘O que acontece amanhã?’ faz ele confessar: o orçamento expira. Agora a pressa é dele, não sua.</p>
+        <p>Aí vem a técnica da escolha ilusória: você dá duas opções, ambas suas, ambas aceitáveis para você. Ele sente que escolheu. E percebam a regra de ferro: ele queria velocidade, você trocou velocidade por um contrato mais longo. Nada sai de graça da sua mesa.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-19" data-module="3" data-num="19" data-title="Ataque pessoal: Vocês vendedores são todos iguais">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 19 · Ataque 4 de 5 · Ataque pessoal</span></p>
+      <h2 class="title quote">Vocês vendedores são todos iguais</h2>
+    </header>
+    <div class="cols">
+      <ul class="topics">
+        <li>Desdém, celular na mesa e atraso são testes de status</li>
+        <li>Rotule a ferida, <strong>não o insulto</strong></li>
+        <li>A ameaça de sair da mesa, dita com calma, é a mais poderosa</li>
+      </ul>
+      <p class="caption">O leão não responde à hiena.</p>
+    </div>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Vendedor subserviente</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say"><span class="cue">[mexendo no celular]</span> Vocês vendedores são todos iguais. Fala logo o preço.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Desculpa, claro! R$ 48 mil, mas a gente negocia.</span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="sub">Vendedor dominante</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say"><span class="cue">[mexendo no celular]</span> Vocês vendedores são todos iguais. Fala logo o preço.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say"><span class="cue">[silêncio até ele levantar os olhos]</span> Parece que alguém já te prometeu muito e te deixou exposto.<span class="note">Rotula a ferida</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">…Já. O último fornecedor me queimou com a diretoria.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Então você não pode errar de novo. E é exatamente por isso que eu não vou jogar um número solto numa conversa de cinco minutos com você no celular. Ou a gente faz isso direito agora, ou eu volto quando você tiver vinte minutos. Você escolhe.<span class="note">Disposição real de levantar da mesa</span></span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>O leão não discute com a hiena. O silêncio até ele levantar os olhos do celular já é a primeira vitória: ele teve que te dar atenção.</p>
+        <p>A rotulação acerta a ferida por trás do insulto. E reparem no que aconteceu: ele confessou que foi queimado com a diretoria. Isso é ouro. É a maior vulnerabilidade dele: medo de errar de novo na frente do chefe.</p>
+        <p>E o fechamento é a carta mais forte do baralho: disposição real de levantar da mesa. Quem pode ir embora calmamente manda na sala. Tom de voz baixo, lento, descendente. Nada de irritação. Irritação é necessidade.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-20" data-module="3" data-num="20" data-title="Ataque: Manda uma proposta que eu vejo">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 20 · Ataque 5 de 5</span></p>
+      <h2 class="title quote">Manda uma proposta que eu vejo</h2>
+    </header>
+    <div class="cols center">
+      <ul class="topics">
+        <li>“Manda proposta” é onde negócios vão morrer</li>
+        <li>Permissão para o não arranca a objeção real</li>
+        <li>Ninguém sai da sala sem <strong>data, hora e quem decide</strong></li>
+      </ul>
+      <div class="tombs" aria-label="Cemitério de propostas" role="img">
+        <span class="tomb">Proposta v3</span>
+        <span class="tomb">Proposta revisada</span>
+        <span class="tomb">Proposta final_FINAL</span>
+      </div>
+    </div>
+    <div class="duel">
+      <div class="dialog antes">
+        <p class="dialog-head"><span>Antes</span><span class="sub">Vendedor subserviente</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Gostei. Manda uma proposta.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Mando amanhã! Qualquer coisa me avisa!</span></p>
+      </div>
+      <div class="dialog depois">
+        <p class="dialog-head"><span>Depois</span><span class="sub">Vendedor dominante</span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Gostei. Manda uma proposta.</span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Mando. Uma pergunta antes: quando alguém me diz “manda uma proposta”, metade das vezes é um “sim” e metade é um “não” educado. Os dois me servem. Qual dos dois é o seu?<span class="note">Permissão para o não</span></span></p>
+        <p class="line c"><span class="who">Comprador</span><span class="say">Sim… mas o financeiro precisa aprovar o parcelamento.<span class="note">A objeção real aparece</span></span></p>
+        <p class="line v"><span class="who">Vendedor</span><span class="say">Então mandar proposta por e-mail seria perder duas semanas. Quinta, 10h, eu, você e o financeiro, 20 minutos. Você manda o convite ou mando eu?<span class="note">Data, hora e quem decide</span></span></p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>‘Os dois me servem’ é uma frase de quem não depende daquele cliente. Ela tira a pressão e, paradoxalmente, faz o cliente falar a verdade. A objeção escondida aparece: o financeiro.</p>
+        <p>E a última pergunta é uma escolha ilusória de novo: não é ‘vamos marcar?’, é ‘quem manda o convite?’. As duas respostas resultam em reunião marcada. Ele não tem como sair dessa pergunta sem parecer que estava enrolando.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-21" data-module="3" data-num="21" data-title="Arsenal de bolso">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 3 <span class="dim">· Slide 21</span></p>
+      <h2 class="title">Arsenal de bolso: <em>armadilhas de coerência</em></h2>
+    </header>
+    <div class="club">
+      <div class="club-head"><span>Arsenal de bolso</span><span>Membro · Diogo Motta</span></div>
+      <div class="traps-head"><span class="label">Quando ele disser</span><span class="label">Depois do silêncio, responda</span></div>
+      <ul class="traps" id="traps">
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Está caro”</span><span class="trap-a">“Caro comparado com os R$ 290 mil que você calculou?”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“O concorrente faz por menos”</span><span class="trap-a">“Então você deveria fechar com eles. O escopo é o mesmo?”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Preciso de desconto”</span><span class="trap-a">“Posso tirar preço se tirarmos escopo. Qual parte do problema você quer manter?”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Preciso para amanhã”</span><span class="trap-a">“O que acontece amanhã?”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Vocês são todos iguais”</span><span class="trap-a">“Parece que alguém já te deixou exposto.”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Manda uma proposta”</span><span class="trap-a">“Sim ou não educado — os dois me servem. Qual é o seu?”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Vou pensar”</span><span class="trap-a">“No que exatamente? Nos números que você me deu ou na solução?”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Não é prioridade agora”</span><span class="trap-a">“Doze rupturas e R$ 1.100 por dia deixaram de ser prioridade desde quando?”</span></button></li>
+        <li class="trap"><button class="trap-btn" type="button"><span class="trap-q">“Não tenho orçamento”</span><span class="trap-a">“Para resolver, ou para continuar perdendo? Porque o segundo você já está pagando.”</span></button></li>
+      </ul>
+    </div>
+    <div class="club-tools">
+      <button class="linkbtn" type="button" id="btn-train" aria-pressed="false">Esconder respostas</button>
+      <button class="linkbtn" type="button" id="btn-draw">Sortear ataque</button>
+      <p class="draw-status" id="draw-status" aria-live="polite"></p>
+    </div>
+    <aside class="drill">
+      <p class="label" style="color:var(--gold)">Dinâmica · 20 min · Arena</p>
+      <div class="drill-cols">
+        <div>
+          <p class="drill-k">Formato original, com plateia</p>
+          <p>Dois voluntários. O comprador sorteia cartas de ataque e tenta quebrar o vendedor; o vendedor só pode responder com S.R.E. A plateia vota com placas: “encurralou” ou “foi encurralado”. Troca de dupla a cada 3 ataques.</p>
+        </div>
+        <div>
+          <p class="drill-k">Versão 1 a 1: Diogo e Lucas</p>
+          <p>Lucas toca em “Sortear ataque”, lê a carta e tenta quebrar o Diogo. Diogo só pode responder com S.R.E. Depois de cada ataque, Lucas dá o veredito: “encurralou” ou “foi encurralado”. Troquem de papel a cada 3 ataques.</p>
+        </div>
+      </div>
+    </aside>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Repare que quase todas as respostas dessa tabela usam alguma coisa que o cliente já disse. É isso que transforma uma réplica em armadilha: você não está argumentando com ele, está colocando duas falas dele frente a frente. E ninguém gosta de discordar de si mesmo em voz alta.</p>
+        <p>A frase sozinha não funciona. Funciona com o silêncio antes, a voz baixa e o caderno aberto com o depoimento dele.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ===================== MÓDULO 4 ===================== -->
+<section class="slide" id="modulo-4" data-module="4" data-title="Módulo 4">
+  <div class="slide-inner divider">
+    <p class="big-n">4</p>
+    <p class="eyebrow">Módulo 4 de 4 <span class="dim">· 15 min · Slides 22–24</span></p>
+    <h2>Cerco à conta</h2>
+    <p class="lede">Arma central: <strong style="color:var(--gold-hi)">mapa de poder e saídas fechadas</strong>.</p>
+    <ol class="agenda" data-agenda="4"></ol>
+  </div>
+</section>
+
+<section class="slide" id="slide-22" data-module="4" data-num="22" data-title="Cercar a conta é ganhar a guerra">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 4 <span class="dim">· Slide 22</span></p>
+      <h2 class="title">Fechar o contrato é ganhar uma batalha. <em>Cercar a conta é ganhar a guerra.</em></h2>
+    </header>
+    <ul class="topics">
+      <li>Mapa de poder: quem decide, quem veta, quem sofre, quem influencia</li>
+      <li>Um único contato é um ponto único de falha: <strong>multiplique os aliados</strong></li>
+      <li>Feche as saídas antes que apareçam: troca de fornecedor, “vamos fazer internamente”, corte de orçamento</li>
+      <li>Prova de resultado mensal com os números que ele confessou</li>
+    </ul>
+    <div class="cols">
+      <div style="display:grid;gap:12px">
+        <p class="label">Mapa de poder · quatro bandeiras</p>
+        <div class="power">
+          <div class="terr"><svg class="flag" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 22V3"/><path fill="currentColor" d="M6 4h12l-3 4 3 4H6z"/></svg><b>Quem decide</b><span>ex.: decisor</span></div>
+          <div class="terr"><svg class="flag" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 22V3"/><path fill="currentColor" d="M6 4h12l-3 4 3 4H6z"/></svg><b>Quem veta</b><span>ex.: financeiro</span></div>
+          <div class="terr"><svg class="flag" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 22V3"/><path fill="currentColor" d="M6 4h12l-3 4 3 4H6z"/></svg><b>Quem sofre com o problema</b><span>ex.: usuário</span></div>
+          <div class="terr"><svg class="flag" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 22V3"/><path fill="currentColor" d="M6 4h12l-3 4 3 4H6z"/></svg><b>Quem influencia</b><span>ex.: técnico</span></div>
+        </div>
+      </div>
+      <div style="display:grid;gap:12px">
+        <p class="label">Rotas de fuga · feche antes que apareçam</p>
+        <ul class="exits">
+          <li><span class="xmark" aria-hidden="true"></span><div><b>Trocar de fornecedor</b><span>Defesa pronta, construída com dados.</span></div></li>
+          <li><span class="xmark" aria-hidden="true"></span><div><b>“Vamos fazer internamente”</b><span>Defesa pronta, construída com dados.</span></div></li>
+          <li><span class="xmark" aria-hidden="true"></span><div><b>Cortar orçamento</b><span>Defesa pronta, construída com dados.</span></div></li>
+        </ul>
+        <p>A melhor defesa: o relatório mensal com as rupturas caindo, usando o mesmo número que ele confessou na primeira reunião.</p>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>O vendedor amador comemora a assinatura e some. O profissional sabe que o contrato é só o direito de começar a jogar.</p>
+        <p>Primeiro, o mapa de poder. Em toda conta existem quatro peças: quem decide, quem pode vetar, quem sofre com o problema e quem influencia. Se você só conhece uma delas, sua conta tem um único ponto de falha: se essa pessoa sair da empresa, você sai junto.</p>
+        <p>Segundo, feche as saídas antes que apareçam. Quais são as rotas de fuga? Trocar de fornecedor, internalizar, cortar orçamento. Para cada uma, você precisa ter uma defesa pronta, construída com dados. E a melhor defesa é o relatório mensal que mostra as rupturas caindo — usando o mesmo número que ele confessou na primeira reunião. Ninguém cancela um fornecedor que prova, todo mês, que salvou o pescoço dele na frente do diretor. A gaiola mais forte é aquela que o cliente agradece por estar dentro.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-23" data-module="4" data-num="23" data-title="Plano de execução: 7 dias">
+  <div class="slide-inner">
+    <header class="slide-head">
+      <p class="eyebrow">Módulo 4 <span class="dim">· Slide 23</span></p>
+      <h2 class="title">Plano de execução: <em>7 dias para virar predador</em></h2>
+    </header>
+    <div class="missions-meta">
+      <p class="label">Dossiê confidencial · Diogo Motta · marque cada missão cumprida</p>
+      <output id="missions-count">0 de 7 missões cumpridas</output>
+    </div>
+    <ol class="dossier" id="dossier">
+      <li class="ficha"><input type="checkbox" id="missao-1"><label for="missao-1"><span class="dia">Dia 1</span><span class="tarefa">Rode o radar de dominância em uma negociação ativa</span><span class="carimbo"><span class="todo">Missão</span><span class="ok">Cumprida</span></span></label></li>
+      <li class="ficha"><input type="checkbox" id="missao-2"><label for="missao-2"><span class="dia">Dia 2</span><span class="tarefa">Reescreva sua abertura com regras e o “justo?”</span><span class="carimbo"><span class="todo">Missão</span><span class="ok">Cumprida</span></span></label></li>
+      <li class="ficha"><input type="checkbox" id="missao-3"><label for="missao-3"><span class="dia">Dia 3</span><span class="tarefa">Monte a escada de interrogatório para 3 contas</span><span class="carimbo"><span class="todo">Missão</span><span class="ok">Cumprida</span></span></label></li>
+      <li class="ficha"><input type="checkbox" id="missao-4"><label for="missao-4"><span class="dia">Dia 4</span><span class="tarefa">Mande o descarte calculado para 1 cliente sumido</span><span class="carimbo"><span class="todo">Missão</span><span class="ok">Cumprida</span></span></label></li>
+      <li class="ficha"><input type="checkbox" id="missao-5"><label for="missao-5"><span class="dia">Dia 5</span><span class="tarefa">Treine S.R.E. em dupla contra 5 ataques</span><span class="carimbo"><span class="todo">Missão</span><span class="ok">Cumprida</span></span></label></li>
+      <li class="ficha"><input type="checkbox" id="missao-6"><label for="missao-6"><span class="dia">Dia 6</span><span class="tarefa">Desenhe o mapa de poder da sua maior conta</span><span class="carimbo"><span class="todo">Missão</span><span class="ok">Cumprida</span></span></label></li>
+      <li class="ficha"><input type="checkbox" id="missao-7"><label for="missao-7"><span class="dia">Dia 7</span><span class="tarefa">Liste as 3 rotas de fuga dessa conta e a defesa de cada uma</span><span class="carimbo"><span class="todo">Missão</span><span class="ok">Cumprida</span></span></label></li>
+    </ol>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>Sete dias, sete missões. Não é para estudar, é para executar. No dia 4, mandem a mensagem de descarte e contem para o grupo quanto tempo levou para o cliente responder. No dia 6, vocês vão descobrir que, na sua maior conta, vocês só conhecem uma ou duas pessoas. Esse é o risco que o seu concorrente vai explorar se vocês não explorarem antes.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="slide" id="slide-24" data-module="4" data-num="24" data-title="Xeque-mate">
+  <div class="slide-inner">
+    <div class="impact">
+      <header class="slide-head">
+        <p class="eyebrow">Módulo 4 <span class="dim">· Slide 24</span></p>
+        <h2 class="title">Xeque-mate</h2>
+        <p class="endline">Quem define a moldura <em>define o preço.</em></p>
+      </header>
+      <div class="board-wrap">
+        <div class="board" data-position="7k/p7/1p4K1/8/8/8/8/8" data-marks="g8,g7,h7" data-toppled="h8" role="img" aria-label="Fim de partida: o rei adversário tombado no canto, sem casas para fugir, e o rei dourado dominando o tabuleiro"></div>
+      </div>
+    </div>
+    <details class="roteiro" open>
+      <summary>Roteiro do treinador</summary>
+      <div class="fala">
+        <p>No começo eu disse que alguém nesta mesa ia obedecer. Agora vocês sabem quem.</p>
+        <p>Não é quem fala mais alto. Não é quem tem o maior cliente. É quem entra com regras, interroga em vez de apresentar, seleciona em vez de perseguir, usa as palavras do comprador como armadilha e sabe levantar da mesa sem piscar.</p>
+        <p>E lembrem da regra do começo: nenhuma dessas armas precisa de mentira. A armadilha mais perfeita que existe é a verdade que o próprio cliente disse e não consegue mais desdizer.</p>
+        <p>Amanhã de manhã, na primeira vez que alguém disser ‘seu preço é um absurdo’, vocês vão ficar em silêncio por cinco segundos. E vão ver o outro lado da mesa piscar primeiro. Xeque-mate.</p>
+      </div>
+    </details>
+    <div class="club-tools">
+      <button class="linkbtn" type="button" data-go="slide-23">Ver as 7 missões</button>
+      <button class="linkbtn" type="button" data-go="capa">Voltar ao início</button>
+    </div>
+  </div>
+</section>
+
+  </main>
+
+  <footer class="navbar">
+    <button class="navbtn prev" type="button" id="btn-prev" aria-label="Slide anterior">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="txt">Voltar</span>
+    </button>
+    <div class="progress">
+      <div class="track" id="track"><div class="fill" id="fill"></div></div>
+      <div class="meta"><span class="meta-title" id="meta-title">Capa</span><span class="meta-count" id="meta-count" aria-live="polite">01 / 31</span></div>
+    </div>
+    <button class="navbtn next" type="button" id="btn-next" aria-label="Próximo slide">
+      <span class="txt">Avançar</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </footer>
+</div>
+
+<div class="index" id="index" role="dialog" aria-modal="true" aria-labelledby="index-title" hidden>
+  <div class="index-inner">
+    <div class="index-top">
+      <h2 id="index-title">Índice</h2>
+      <button class="tool" type="button" id="btn-index-close">Fechar</button>
+    </div>
+    <div class="index-grid" id="index-grid"></div>
+    <p class="keys">Atalhos: <kbd>→</kbd> avança · <kbd>←</kbd> volta · <kbd>R</kbd> roteiro · <kbd>I</kbd> índice · <kbd>F</kbd> tela cheia · <kbd>Esc</kbd> fecha</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  root.classList.add("js");
+  root.lang = "pt-BR";
+
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  var $ = function (id) { return document.getElementById(id); };
+
+  var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var MODULES = {
+    "0": "Abertura",
+    "1": "Módulo 1 · Dominância nos primeiros 30 segundos",
+    "2": "Módulo 2 · Juiz, Premiação Absoluta e Perda",
+    "3": "Módulo 3 · Contra-ataque psicológico",
+    "4": "Módulo 4 · Cerco à conta"
+  };
+  var current = 0;
+  var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+
+  /* ---------- Navegação ---------- */
+  function indexOfId(id) {
+    for (var i = 0; i < slides.length; i++) if (slides[i].id === id) return i;
+    return -1;
+  }
+  function go(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    if (i !== current) slides[current].classList.remove("is-active");
+    current = i;
+    var s = slides[i];
+    s.classList.add("is-active");
+    s.scrollTop = 0;
+    var mod = s.getAttribute("data-module");
+    $("module-label").textContent = MODULES[mod] || "";
+    var num = s.getAttribute("data-num");
+    $("meta-title").textContent = (num ? "Slide " + num + " · " : "") + s.getAttribute("data-title");
+    $("meta-count").textContent = pad(i + 1) + " / " + pad(slides.length);
+    $("fill").style.width = (slides.length > 1 ? (i / (slides.length - 1)) * 100 : 100) + "%";
+    $("btn-prev").disabled = i === 0;
+    $("btn-next").disabled = i === slides.length - 1;
+    var cur = document.querySelectorAll("#index-grid button");
+    for (var k = 0; k < cur.length; k++) cur[k].setAttribute("aria-current", cur[k].getAttribute("data-go") === s.id ? "true" : "false");
+    try { history.replaceState(null, "", "#" + s.id); } catch (e) {}
+  }
+  function next() { go(current + 1); }
+  function prev() { go(current - 1); }
+  function goId(id) { var i = indexOfId(id); if (i >= 0) { closeIndex(); go(i); } }
+
+  $("btn-next").addEventListener("click", next);
+  $("btn-prev").addEventListener("click", prev);
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest && e.target.closest("[data-go]");
+    if (t) goId(t.getAttribute("data-go"));
+  });
+
+  // marcas de módulo na barra de progresso
+  (function () {
+    var track = $("track");
+    slides.forEach(function (s, i) {
+      if (/^modulo-/.test(s.id)) {
+        var t = document.createElement("span");
+        t.className = "tick";
+        t.style.left = (i / (slides.length - 1)) * 100 + "%";
+        track.appendChild(t);
+      }
+    });
+  })();
+
+  // agenda das divisórias e índice
+  (function () {
+    var groups = {};
+    slides.forEach(function (s) {
+      var m = s.getAttribute("data-module");
+      (groups[m] = groups[m] || []).push(s);
+    });
+    document.querySelectorAll("[data-agenda]").forEach(function (ol) {
+      var m = ol.getAttribute("data-agenda");
+      (groups[m] || []).forEach(function (s) {
+        var num = s.getAttribute("data-num");
+        if (!num) return;
+        var li = document.createElement("li");
+        var b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("data-go", s.id);
+        b.innerHTML = '<span class="n">' + pad(+num) + '</span><span></span>';
+        b.lastChild.textContent = s.getAttribute("data-title");
+        li.appendChild(b);
+        ol.appendChild(li);
+      });
+    });
+    var grid = $("index-grid");
+    Object.keys(groups).sort().forEach(function (m) {
+      var box = document.createElement("div");
+      box.className = "index-mod";
+      var h = document.createElement("h3");
+      h.textContent = MODULES[m];
+      box.appendChild(h);
+      groups[m].forEach(function (s) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("data-go", s.id);
+        var num = s.getAttribute("data-num");
+        b.innerHTML = '<span class="n">' + (num ? pad(+num) : "·") + '</span><span></span>';
+        b.lastChild.textContent = s.getAttribute("data-title");
+        box.appendChild(b);
+      });
+      grid.appendChild(box);
+    });
+  })();
+
+  /* ---------- Índice ---------- */
+  var lastFocus = null;
+  function openIndex() {
+    lastFocus = document.activeElement;
+    $("index").hidden = false;
+    var cur = document.querySelector('#index-grid button[aria-current="true"]') || $("btn-index-close");
+    cur.focus();
+  }
+  function closeIndex() {
+    if ($("index").hidden) return;
+    $("index").hidden = true;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  $("btn-index").addEventListener("click", openIndex);
+  $("btn-index-close").addEventListener("click", closeIndex);
+
+  /* ---------- Roteiro ---------- */
+  var showScript = store.get("cf-roteiro", true);
+  function applyScript() {
+    document.querySelectorAll(".roteiro").forEach(function (d) { d.open = showScript; });
+    $("btn-roteiro").setAttribute("aria-pressed", String(showScript));
+  }
+  $("btn-roteiro").addEventListener("click", function () {
+    showScript = !showScript;
+    store.set("cf-roteiro", showScript);
+    applyScript();
+  });
+  applyScript();
+
+  /* ---------- Tela cheia ---------- */
+  var fsBtn = $("btn-fs");
+  if (!document.fullscreenEnabled) fsBtn.hidden = true;
+  function toggleFs() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+      else root.requestFullscreen().catch(function () {});
+    } catch (e) {}
+  }
+  fsBtn.addEventListener("click", toggleFs);
+
+  /* ---------- Teclado e gesto ---------- */
+  document.addEventListener("keydown", function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target;
+    if (t.closest && t.closest("input, textarea, select, [contenteditable]")) return;
+    if (!$("index").hidden) { if (e.key === "Escape") closeIndex(); return; }
+    var k = e.key;
+    if (k === "ArrowRight" || k === "PageDown") { e.preventDefault(); next(); }
+    else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); prev(); }
+    else if (k === " ") {
+      if (t.closest && t.closest("button, summary, a, label")) return;
+      e.preventDefault(); e.shiftKey ? prev() : next();
+    }
+    else if (k === "Home") { e.preventDefault(); go(0); }
+    else if (k === "End") { e.preventDefault(); go(slides.length - 1); }
+    else if (k === "i" || k === "I") openIndex();
+    else if (k === "r" || k === "R") $("btn-roteiro").click();
+    else if ((k === "f" || k === "F") && !fsBtn.hidden) toggleFs();
+  });
+  (function () {
+    var stage = $("stage"), sx = null, sy = 0, st = 0;
+    stage.addEventListener("touchstart", function (e) {
+      if (e.touches.length !== 1 || (e.target.closest && e.target.closest("input, textarea, select"))) { sx = null; return; }
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+    }, { passive: true });
+    stage.addEventListener("touchend", function (e) {
+      if (sx === null) return;
+      var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - st < 800) { dx < 0 ? next() : prev(); }
+      sx = null;
+    }, { passive: true });
+  })();
+
+  /* ---------- Tabuleiros ---------- */
+  var GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+  document.querySelectorAll(".board").forEach(function (el) {
+    var rows = el.getAttribute("data-position").split("/");
+    var marks = (el.getAttribute("data-marks") || "").split(",").filter(Boolean);
+    var toppled = el.getAttribute("data-toppled") || "";
+    rows.forEach(function (row, r) {
+      var c = 0;
+      row.split("").forEach(function (ch) {
+        var n = /\d/.test(ch) ? +ch : 1;
+        for (var j = 0; j < n; j++) {
+          var name = "abcdefgh".charAt(c) + (8 - r);
+          var sq = document.createElement("span");
+          sq.className = "sq " + ((r + c) % 2 ? "d" : "l") + (marks.indexOf(name) >= 0 ? " x" : "");
+          if (!/\d/.test(ch)) {
+            var pc = document.createElement("span");
+            pc.className = "pc" + (ch === "K" ? " gold" : "") + (name === toppled ? " toppled" : "");
+            pc.textContent = GLYPH[ch.toLowerCase()];
+            sq.appendChild(pc);
+          }
+          el.appendChild(sq);
+          c++;
+        }
+      });
+    });
+  });
+
+  /* ---------- Radar ---------- */
+  (function () {
+    var svg = $("radar-svg"), NS = "http://www.w3.org/2000/svg";
+    var C = 150, R = 110;
+    var names = ["Perguntas", "Agenda", "Justificativa", "Ritmo", "Próximo passo"];
+    function el(tag, attrs) { var n = document.createElementNS(NS, tag); for (var a in attrs) n.setAttribute(a, attrs[a]); return n; }
+    function pt(angleDeg, r) { var a = angleDeg * Math.PI / 180; return [C + r * Math.cos(a), C + r * Math.sin(a)]; }
+    svg.appendChild(el("circle", { cx: C, cy: C, r: R, "class": "r-bg" }));
+    [R, R * 2 / 3, R / 3].forEach(function (r) { svg.appendChild(el("circle", { cx: C, cy: C, r: r, "class": "r-ring" })); });
+    var e = pt(-90 + 48, R);
+    svg.appendChild(el("path", { d: "M" + C + " " + C + " L" + C + " " + (C - R) + " A" + R + " " + R + " 0 0 1 " + e[0].toFixed(1) + " " + e[1].toFixed(1) + " Z", "class": "r-sweep" }));
+    var blips = [], pulses = [], labels = [];
+    names.forEach(function (name, i) {
+      var ang = -90 + i * 72;
+      var o = pt(ang, R);
+      svg.appendChild(el("line", { x1: C, y1: C, x2: o[0], y2: o[1], "class": "r-spoke" }));
+      var b = pt(ang, R * 0.68);
+      var pulse = el("circle", { cx: b[0], cy: b[1], r: 6, "class": "r-pulse" });
+      pulse.style.animationDelay = (i * 0.35) + "s";
+      var blip = el("circle", { cx: b[0], cy: b[1], r: 6, "class": "r-blip" });
+      svg.appendChild(pulse); svg.appendChild(blip);
+      var l = pt(ang, R + 16), anchor = "middle", dy = 4;
+      if (i === 0) dy = -2;
+      if (i === 1) anchor = "start";
+      if (i === 4) anchor = "end";
+      if (i === 2 || i === 3) dy = 14;
+      var t = el("text", { x: l[0].toFixed(1), y: (l[1] + dy).toFixed(1), "text-anchor": anchor, "class": "r-label" });
+      t.textContent = name;
+      svg.appendChild(t);
+      blips.push(blip); pulses.push(pulse); labels.push(t);
+    });
+    function update() {
+      var dele = 0;
+      for (var i = 0; i < 5; i++) {
+        var checked = document.querySelector('input[name="sig-' + i + '"]:checked');
+        var v = checked ? checked.value : "dele";
+        if (v === "dele") dele++;
+        blips[i].setAttribute("class", "r-blip " + v);
+        pulses[i].setAttribute("class", "r-pulse " + v);
+        labels[i].setAttribute("class", "r-label " + v);
+      }
+      var vd = $("radar-verdict");
+      if (dele >= 3) { vd.className = "verdict bad"; vd.textContent = dele + " de 5 do lado dele. Você está no banco dos réus: troque de cadeira."; }
+      else if (dele > 0) { vd.className = "verdict good"; vd.textContent = dele + " de 5 do lado dele. Você comanda, mas rode o radar de novo em 5 minutos."; }
+      else { vd.className = "verdict good"; vd.textContent = "0 de 5 do lado dele. Você está no comando da mesa."; }
+    }
+    $("radar-signals").addEventListener("change", update);
+    update();
+  })();
+
+  /* ---------- Calculadora da perda ---------- */
+  (function () {
+    var brl = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+    var dec = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    var money = function (n) { return "R$ " + brl.format(Math.round(n)); };
+    var num = function (id) { var v = parseFloat($(id).value); return isFinite(v) && v > 0 ? v : 0; };
+    function calc() {
+      var prob = ($("calc-problema").value || "").trim() || "ocorrências";
+      var q = num("calc-qtd"), c = num("calc-custo"), p = num("calc-preco");
+      var tri = q * c, ano = tri * 4, dia = ano / 252;
+      $("calc-ano").innerHTML = "";
+      $("calc-ano").appendChild(document.createTextNode(money(ano) + " "));
+      var sm = document.createElement("small"); sm.textContent = "/ ano"; $("calc-ano").appendChild(sm);
+      $("calc-tag").textContent = money(p);
+      $("calc-tri").textContent = money(tri);
+      $("calc-dia").textContent = money(dia);
+      var ratio = $("calc-ratio");
+      ratio.innerHTML = "";
+      if (p > 0) {
+        ratio.appendChild(document.createTextNode("A perda anual é "));
+        var b = document.createElement("b"); b.textContent = dec.format(ano / p) + "×"; ratio.appendChild(b);
+        ratio.appendChild(document.createTextNode(" o preço."));
+      }
+      $("calc-fala1").textContent = "Vamos usar os seus números, não os meus. " + brl.format(q) + " " + prob + " por trimestre, " + money(c) + " cada. São " + money(tri) + " por trimestre, " + money(ano) + " por ano. Dá uns " + money(dia) + " por dia útil, todo dia, inclusive hoje. Bate?";
+      $("calc-fala2").textContent = "Então só me ajuda a entender uma coisa: " + money(p) + " é caro comparado com " + money(ano) + " de perda que você mesmo calculou?";
+      var weak = ano <= p;
+      $("calc-warn").hidden = !weak;
+      $("calc-fala2").hidden = weak;
+    }
+    ["calc-problema", "calc-qtd", "calc-custo", "calc-preco"].forEach(function (id) { $(id).addEventListener("input", calc); });
+    calc();
+  })();
+
+  /* ---------- Treino do silêncio ---------- */
+  (function () {
+    var btn = $("silence-btn"), n = $("silence-n"), state = $("silence-state"), ring = $("ring-fg");
+    var LEN = 226.2, timer = null;
+    function stop() { clearInterval(timer); timer = null; }
+    btn.addEventListener("click", function () {
+      stop();
+      var total = 5, start = Date.now();
+      n.textContent = "5"; ring.style.strokeDashoffset = "0";
+      state.textContent = "Silêncio. Olho no olho. Não preencha o espaço.";
+      btn.textContent = "Recomeçar";
+      timer = setInterval(function () {
+        var el = (Date.now() - start) / 1000;
+        var left = Math.max(0, total - el);
+        n.textContent = String(Math.ceil(left));
+        ring.style.strokeDashoffset = String(LEN * (1 - left / total));
+        if (left <= 0) {
+          stop();
+          n.textContent = "0";
+          state.textContent = "Agora rotule. Depois, encurrale com as palavras dele.";
+          btn.textContent = "Treinar de novo";
+        }
+      }, reduceMotion ? 250 : 50);
+    });
+  })();
+
+  /* ---------- Arsenal de bolso ---------- */
+  (function () {
+    var list = $("traps"), items = Array.prototype.slice.call(list.querySelectorAll(".trap"));
+    var trainBtn = $("btn-train"), status = $("draw-status"), last = -1;
+    function setTraining(on) {
+      list.classList.toggle("is-training", on);
+      trainBtn.setAttribute("aria-pressed", String(on));
+      trainBtn.textContent = on ? "Mostrar respostas" : "Esconder respostas";
+      items.forEach(function (li) { li.classList.remove("revealed"); });
+      if (!on) { items.forEach(function (li) { li.classList.remove("drawn"); }); status.textContent = ""; }
+    }
+    trainBtn.addEventListener("click", function () { setTraining(!list.classList.contains("is-training")); });
+    items.forEach(function (li) {
+      li.querySelector(".trap-btn").addEventListener("click", function () {
+        if (list.classList.contains("is-training")) li.classList.toggle("revealed");
+      });
+    });
+    $("btn-draw").addEventListener("click", function () {
+      setTraining(true);
+      var i;
+      do { i = Math.floor(Math.random() * items.length); } while (items.length > 1 && i === last);
+      last = i;
+      items.forEach(function (li) { li.classList.remove("drawn"); });
+      items[i].classList.add("drawn");
+      status.innerHTML = "";
+      status.appendChild(document.createTextNode("Ataque sorteado: "));
+      var b = document.createElement("b"); b.textContent = items[i].querySelector(".trap-q").textContent; status.appendChild(b);
+      status.appendChild(document.createTextNode(". Cinco segundos de silêncio, depois responda."));
+      items[i].scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    });
+  })();
+
+  /* ---------- Missões ---------- */
+  (function () {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll("#dossier input"));
+    var saved = store.get("cf-missoes", []);
+    function count() {
+      var done = boxes.filter(function (b) { return b.checked; }).length;
+      $("missions-count").textContent = done + " de 7 missões cumpridas";
+    }
+    boxes.forEach(function (b) {
+      b.checked = saved.indexOf(b.id) >= 0;
+      b.addEventListener("change", function () {
+        store.set("cf-missoes", boxes.filter(function (x) { return x.checked; }).map(function (x) { return x.id; }));
+        count();
+      });
+    });
+    count();
+  })();
+
+  /* ---------- Início ---------- */
+  function start(data) {
+    var fromHash = indexOfId((location.hash || "").slice(1));
+    var i = fromHash >= 0 ? fromHash : (data && typeof data.slide === "number" ? data.slide : 0);
+    slides.forEach(function (s) { s.classList.remove("is-active"); });
+    current = i;
+    go(i);
+  }
+  var hot = window.claude && window.claude.hot;
+  if (hot && hot.snapshot) { try { hot.snapshot(function () { return { slide: current }; }); } catch (e) {} }
+  if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+})();
+</script>
+</body>
+</html>
